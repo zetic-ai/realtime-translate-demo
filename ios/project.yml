@@ -1,0 +1,34 @@
+name: RealtimeTranslate
+options:
+  minimumXcodeGenVersion: 2.38.0
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.realtimetranslate
+targets:
+  RealtimeTranslate:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      base:
+        INFOPLIST_FILE: Sources/Info.plist
+        PRODUCT_NAME: RealtimeTranslate
+        GENERATE_INFOPLIST_FILE: NO
+    scheme:
+      testTargets:
+        - RealtimeTranslateTests
+        - RealtimeTranslateUITests
+  RealtimeTranslateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: RealtimeTranslate
+  RealtimeTranslateUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: RealtimeTranslate
