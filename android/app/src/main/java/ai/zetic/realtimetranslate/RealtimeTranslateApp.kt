@@ -65,7 +65,7 @@ fun RealtimeTranslateApp(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Realtime Translate", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        StatusHeader(state.phase)
+        StatusHeader(state.phase, listOfNotNull(state.sourceCapabilityMessage, state.modelGateMessage))
         when (state.phase) {
             SessionPhase.PermissionRequired, SessionPhase.Ready -> SetupPanel(state, onAction, onOpenAppSettings)
             SessionPhase.Error -> ErrorPanel(state.errorMessage.orEmpty(), onAction)
@@ -78,7 +78,7 @@ private val MaterialThemeColor
     @Composable get() = androidx.compose.material3.MaterialTheme.colorScheme
 
 @Composable
-private fun StatusHeader(phase: SessionPhase) {
+private fun StatusHeader(phase: SessionPhase, messages: List<String>) {
     val label = when (phase) {
         SessionPhase.PermissionRequired -> "마이크 권한 필요"
         SessionPhase.Ready -> "시작 준비됨"
@@ -88,14 +88,18 @@ private fun StatusHeader(phase: SessionPhase) {
         SessionPhase.Error -> "오류 발생"
     }
     Card(colors = CardDefaults.cardColors(containerColor = SurfaceMuted), modifier = Modifier.fillMaxWidth().semantics { contentDescription = "세션 상태: $label" }) {
-        Text(label, modifier = Modifier.padding(12.dp), color = TextSecondary, fontSize = 12.sp)
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, color = TextSecondary, fontSize = 12.sp)
+            messages.forEach { Text(it, color = TextSecondary, fontSize = 12.sp) }
+        }
     }
 }
 
 @Composable
 private fun SetupPanel(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        LanguagePicker("발화 언어", state.inputLanguage.displayName, SpeechLanguage.entries.toList().map { it.displayName to UiAction.SelectInput(it) }, onAction)
+        val inputActions = SpeechLanguage.entries.toList().map { it.displayName to UiAction.SelectInput(it) }
+        LanguagePicker("발화 언어", state.inputLanguage.displayName, inputActions, onAction, (state.availableInputLanguages + state.downloadableInputLanguages).map { UiAction.SelectInput(it) }.toSet())
         LanguagePicker("번역 언어", state.outputLanguage.displayName, HyMt2Languages.all.map { it.displayName to UiAction.SelectOutput(it) }, onAction)
         if (state.phase == SessionPhase.PermissionRequired) {
             if (state.permissionPermanentlyDenied) {
@@ -108,15 +112,16 @@ private fun SetupPanel(state: SessionUiState, onAction: (UiAction) -> Unit, onOp
                 }
             }
         } else {
-            Button(onClick = { onAction(UiAction.Start) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "번역 세션 시작" }) {
-                Text("세션 시작")
+            val downloadsModel = state.inputLanguage in state.downloadableInputLanguages
+            Button(onClick = { onAction(UiAction.Start) }, enabled = state.inputLanguage in state.availableInputLanguages || downloadsModel, modifier = Modifier.fillMaxWidth().semantics { contentDescription = if (downloadsModel) "언어 모델 다운로드" else "번역 세션 시작" }) {
+                Text(if (downloadsModel) "언어 모델 다운로드" else "세션 시작")
             }
         }
     }
 }
 
 @Composable
-private fun LanguagePicker(label: String, selected: String, options: List<Pair<String, UiAction>>, onAction: (UiAction) -> Unit) {
+private fun LanguagePicker(label: String, selected: String, options: List<Pair<String, UiAction>>, onAction: (UiAction) -> Unit, enabledActions: Set<UiAction> = options.map { it.second }.toSet()) {
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, color = TextSecondary, fontSize = 12.sp)
@@ -132,7 +137,7 @@ private fun LanguagePicker(label: String, selected: String, options: List<Pair<S
             modifier = Modifier.heightIn(max = 320.dp),
         ) {
             options.forEach { (name, action) ->
-                DropdownMenuItem(text = { Text(name) }, onClick = { expanded = false; onAction(action) })
+                DropdownMenuItem(text = { Text(name) }, enabled = action in enabledActions, onClick = { expanded = false; onAction(action) })
             }
         }
     }
@@ -169,7 +174,7 @@ private fun MessageBubble(item: ConversationItem) {
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "${item.speaker ?: "처리 중"} 발화" },
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(item.speaker ?: "처리 중", color = TextSecondary, fontSize = 12.sp)
+            Text(item.speaker ?: if (item.isFinal) "화자 분리 미검증" else "처리 중", color = TextSecondary, fontSize = 12.sp)
             Text(item.transcript, fontSize = 16.sp)
             item.translation?.let {
                 HorizontalDivider()

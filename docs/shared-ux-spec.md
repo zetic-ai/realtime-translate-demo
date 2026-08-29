@@ -23,10 +23,17 @@
 
 부분 STT는 마지막 대화 항목 안에서 `processing` 상태로 표시하고, 확정 원문이 생길 때만 번역을 시작한다. 화자 정보는 확정된 발화에만 붙인다. 한 항목은 `화자 라벨`, `원문`, `번역문`, `확정/처리 상태`를 가진다.
 
+## 온디바이스 STT 사전 조건
+
+- Android API 31~32는 on-device service가 있으면 여섯 입력 언어를 provisional로 시작할 수 있다. 시작 시 언어별 온디바이스 인식이 실패하면 `onDeviceUnsupported` 오류와 복구 방법을 표시한다. API 33 이상에서는 installed-on-device와 downloadable 상태를 구분한다. installed-on-device probe를 통과한 언어만 선택·시작을 허용하며, downloadable 언어는 `언어 모델 다운로드` 버튼으로 실제 다운로드 요청을 시작한다. API 33에서는 다운로드 완료 뒤 사용자에게 세션 재시작을 안내하고, API 34 이상에서는 callback 뒤 probe를 다시 실행해 통과한 경우에만 시작한다.
+- iOS는 선택 locale의 `supportsOnDeviceRecognition` 및 `isAvailable`가 참이고 Speech·마이크 권한이 허용되어야 한다. STT 요청에는 `requiresOnDeviceRecognition = true`를 설정한다.
+- 위 조건 중 하나라도 충족하지 않으면 해당 언어를 시작 가능한 입력으로 표시하지 않거나 `error` 상태로 안내한다. 자동 네트워크 STT fallback은 사용하지 않는다.
+- 두 플랫폼은 capability 확인 실패, 권한 거부, 언어 모델 미설치에 대해 같은 실패 원인과 복구 의미를 표시한다. Android는 API 31 미만, API 31~32의 `onDeviceUnsupported`, API 33 이상의 installed/downloadable 상태를, iOS는 온디바이스 인식을 지원하지 않는 locale을 명시적으로 구분한다.
+
 ## 출력 언어 선택과 실행 게이트
 
 - 출력 언어 선택기는 [모델 언어 호환성 게이트](model-compatibility-gate.md)의 38개 항목을 모두 표시하고 선택을 허용한다.
-- 언어 선택 자체는 지원 보증이 아니다. 세션 시작 또는 번역 직전에 선택 조합의 모델 초기화와 실기기 호환성 게이트를 확인한다.
+- 입력 언어는 플랫폼 온디바이스 STT capability·권한을 통과해야 선택 및 세션 시작이 가능하다. 출력 언어 선택 자체는 지원 보증이 아니다. 세션 시작 또는 번역 직전에 선택 조합의 모델 초기화와 실기기 호환성 게이트를 확인한다.
 - 초기화 또는 게이트가 실패하면 번역을 시도하거나 빈 번역 버블을 만들지 않는다. 공통 `error` 상태에서 선택 언어, 실패 원인, `다시 시도` 또는 `설정 열기`의 복구 동작을 표시한다.
 - Android와 iOS는 같은 실패 조건에 같은 상태 키와 사용자 의미를 적용한다. 플랫폼별 오류 문구는 OS의 표현 방식에 맞출 수 있지만, 실패 원인과 복구 동작은 같아야 한다.
 

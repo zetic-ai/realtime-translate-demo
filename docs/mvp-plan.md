@@ -13,23 +13,27 @@
 
 ## 온디바이스 파이프라인
 
-`마이크 PCM` → `발화 구간/화자 분리` → `스트리밍 STT` → `번역` → `대화 항목 표시`
+`마이크 PCM` → `pyannote 화자 분리`와 `플랫폼 온디바이스 STT`로 fan-out → `확정 STT` → `번역` → `대화 항목 표시`
 
-| 단계 | 승인된 모델 | 책임 |
+마이크 PCM은 두 소비자가 각자의 처리를 끝낼 때까지 유효하게 유지한다. pyannote의 화자 구분 결과는 확정된 STT 발화에 귀속한다. 부분 STT는 표시할 수 있지만 번역하지 않으며, 확정 STT만 Hy-MT2에 전달한다.
+
+| 단계 | 구성 요소 | 책임 |
 | --- | --- | --- |
 | 발화 구간 및 화자 분리 | `ajayshah/pyannote-segmentation-3.0` | 발화 경계와 화자 구분에 필요한 신호 제공 |
-| 스트리밍 STT 인코딩 | `realtonypark/Moonshine-Streaming-ASR-Encoder` | 음성 프레임 인코딩 |
-| 스트리밍 STT 디코딩 | `realtonypark/Moonshine-Streaming-ASR-Decoder` | 부분/확정 원문 생성 |
+| Android STT | `SpeechRecognizer.createOnDeviceSpeechRecognizer()` | 온디바이스 부분/확정 원문 생성 |
+| iOS STT | `SFSpeechRecognizer` + `requiresOnDeviceRecognition = true` | 온디바이스 부분/확정 원문 생성 |
 | 번역 | `SJ_zetic/Hy-MT2-1.8B` | 확정 원문의 선택 언어 번역 |
 
-모델 로드와 추론은 UI 스레드 밖에서 수행한다. 입력 오디오 버퍼는 해당 추론이 끝날 때까지 유효해야 하며, 세션 종료 시 모델과 오디오 리소스를 명시적으로 해제한다.
+모델 로드와 추론은 UI 스레드 밖에서 수행한다. pyannote와 Hy-MT2는 메모리 압박을 줄이기 위해 같은 시점에 추론하지 않고 하나의 직렬 실행 큐로 관리한다. 입력 오디오 버퍼는 해당 추론이 끝날 때까지 유효해야 하며, 세션 종료 시 모델과 오디오 리소스를 명시적으로 해제한다.
 
 ## 언어 범위
 
-- 요청 입력 언어: 한국어, 중국어, 일본어, 영어, 프랑스어, 스페인어
+- 요청 입력 언어: 한국어, 중국어, 일본어, 영어, 프랑스어, 스페인어. 각 언어는 해당 기기·OS에서 온디바이스 STT capability와 권한 검사를 통과한 경우에만 선택·실행할 수 있다. Android API 31~32에서는 온디바이스 서비스가 있을 때 여섯 언어를 provisional로 시작할 수 있으며, 시작 시 언어별 온디바이스 실패는 `onDeviceUnsupported` 오류로 표시한다.
 - 출력 언어: [모델 언어 호환성 게이트](model-compatibility-gate.md)의 공식 Supported Languages 표에 기록된 38개 UI 선택 항목
 
 38개 출력 언어는 모두 UI에서 선택할 수 있다. 다만 선택은 지원 보증이 아니며, 번역 실행은 선택 조합의 모델 초기화와 실기기 호환성 게이트를 통과한 경우에만 허용한다. 초기화 또는 게이트가 실패하면 번역을 실행하지 않고 오류 상태와 복구 방법을 표시한다.
+
+Android API 31~32는 온디바이스 서비스 가용성만 확인하므로 서비스가 있으면 여섯 언어를 provisional로 시작한다. 시작 시 언어별 온디바이스 인식이 실패하면 `onDeviceUnsupported` 오류와 복구 방법을 표시한다. API 33 이상에서는 installed와 downloadable 상태를 구분한다. installed-on-device probe를 통과한 언어는 선택·시작할 수 있고, downloadable 언어는 `언어 모델 다운로드` 버튼으로 실제 다운로드 요청을 시작한다. API 33에서는 다운로드 완료 후 사용자가 세션을 다시 시작하도록 안내하고, API 34 이상에서는 다운로드 callback 뒤 probe를 다시 실행해 통과한 경우에만 시작한다. iOS는 선택 locale의 `supportsOnDeviceRecognition` 및 `isAvailable`, Speech·마이크 권한을 확인한다. 어떤 플랫폼에서도 온디바이스 STT를 사용할 수 없을 때 네트워크 STT로 자동 fallback하지 않는다.
 
 ## 범위 제외
 

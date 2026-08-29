@@ -26,9 +26,15 @@ targets:
     sources: [Tests]
     dependencies:
       - target: RealtimeTranslate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
   RealtimeTranslateUITests:
     type: bundle.ui-testing
     platform: iOS
     sources: [UITests]
     dependencies:
       - target: RealtimeTranslate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

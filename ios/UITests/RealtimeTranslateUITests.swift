@@ -37,4 +37,14 @@ final class RealtimeTranslateUITests: XCTestCase {
 
     XCTAssertTrue(app.buttons["새 세션 시작"].exists)
   }
+
+  func testProcessingStateShowsPartialTranscript() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-uiState", "processing"]
+    app.launch()
+
+    XCTAssertTrue(app.staticTexts["남은 발화를 처리하는 중"].exists)
+    XCTAssertTrue(app.staticTexts["반갑습니다"].exists)
+    XCTAssertTrue(app.staticTexts["번역을 준비하는 중"].exists)
+  }
 }

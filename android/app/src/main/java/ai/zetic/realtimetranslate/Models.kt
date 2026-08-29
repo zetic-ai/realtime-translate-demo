@@ -52,4 +52,8 @@ data class SessionUiState(
     val outputLanguage: TranslationLanguage = HyMt2Languages.all.first { it.code == "en" },
     val conversations: List<ConversationItem> = emptyList(),
     val errorMessage: String? = null,
+    val modelGateMessage: String? = null,
+    val availableInputLanguages: Set<SpeechLanguage> = emptySet(),
+    val downloadableInputLanguages: Set<SpeechLanguage> = emptySet(),
+    val sourceCapabilityMessage: String? = null,
 )

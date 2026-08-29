@@ -9,12 +9,12 @@
 /* Begin PBXBuildFile section */
 		3ED0FD2BAD517FB6C19A6A69 /* ModelCompatibilityGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */; };
 		72612CC547B37C8683B4CE3B /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C61319FFF47136929BAF199 /* Models.swift */; };
+		8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */; };
 		8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */; };
 		94DC78FD9FAE004496146F59 /* RealtimeTranslateUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE8BBE5E61A035A50C6BED0 /* RealtimeTranslateUITests.swift */; };
 		98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */; };
 		994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */; };
 		9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */; };
-		B8B9AB7DDFA3C3913225759F /* TranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E29B9727AEDDB1F66F867CC /* TranslationPipeline.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,10 +37,10 @@
 /* Begin PBXFileReference section */
 		0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateApp.swift; sourceTree = "<group>"; };
 		1D3AA1EC83007BC0E6C5962E /* RealtimeTranslateUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSpeechRecognizer.swift; sourceTree = "<group>"; };
 		3C61319FFF47136929BAF199 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4EE8BBE5E61A035A50C6BED0 /* RealtimeTranslateUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateUITests.swift; sourceTree = "<group>"; };
 		6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateTests.swift; sourceTree = "<group>"; };
-		6E29B9727AEDDB1F66F867CC /* TranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPipeline.swift; sourceTree = "<group>"; };
 		6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateRootView.swift; sourceTree = "<group>"; };
 		70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCompatibilityGate.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
@@ -82,10 +82,10 @@
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
 				70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
+				28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */,
 				0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */,
 				6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */,
 				7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */,
-				6E29B9727AEDDB1F66F867CC /* TranslationPipeline.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -214,10 +214,10 @@
 			files = (
 				3ED0FD2BAD517FB6C19A6A69 /* ModelCompatibilityGate.swift in Sources */,
 				72612CC547B37C8683B4CE3B /* Models.swift in Sources */,
+				8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */,
 				8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */,
 				98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */,
 				994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */,
-				B8B9AB7DDFA3C3913225759F /* TranslationPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -275,6 +275,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -290,6 +291,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -426,6 +428,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -441,6 +444,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

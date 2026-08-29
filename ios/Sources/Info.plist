@@ -24,6 +24,8 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>대화를 듣고 실시간으로 번역하기 위해 마이크가 필요합니다.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>기기 안에서 대화를 텍스트로 변환하기 위해 음성 인식이 필요합니다.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

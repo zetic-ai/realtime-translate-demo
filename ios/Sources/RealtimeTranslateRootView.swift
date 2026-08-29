@@ -20,7 +20,11 @@ struct RealtimeTranslateRootView: View {
         case .recording, .processing, .finished:
           ConversationView(viewModel: viewModel)
         case let .error(reason):
-          ErrorView(reason: reason, retry: viewModel.start)
+          if viewModel.items.isEmpty {
+            ErrorView(reason: reason, retry: viewModel.start)
+          } else {
+            ConversationView(viewModel: viewModel, errorReason: reason)
+          }
         }
       }
       .navigationTitle("실시간 번역")
@@ -35,10 +39,15 @@ private struct SetupView: View {
   var body: some View {
     Form {
       Section("언어") {
-        Picker("발화 언어", selection: $viewModel.sourceLanguage) {
-          ForEach(SpokenLanguage.allCases) { Text($0.rawValue).tag($0) }
+        if viewModel.availableSourceLanguages.isEmpty {
+          Text("사용 가능한 온디바이스 음성 인식 언어가 없습니다.")
+            .foregroundStyle(DesignToken.textSecondary)
+        } else {
+          Picker("발화 언어", selection: $viewModel.sourceLanguage) {
+            ForEach(viewModel.availableSourceLanguages) { Text($0.rawValue).tag($0) }
+          }
+          .accessibilityLabel("발화 언어")
         }
-        .accessibilityLabel("발화 언어")
         Picker("번역 언어", selection: $viewModel.targetLanguage) {
           ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
         }
@@ -57,6 +66,7 @@ private struct SetupView: View {
           Button("번역 시작", action: viewModel.start)
             .frame(maxWidth: .infinity)
             .accessibilityLabel("번역 시작")
+            .disabled(viewModel.availableSourceLanguages.isEmpty)
         }
       }
     }
@@ -72,10 +82,14 @@ private struct SetupView: View {
 
 private struct ConversationView: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
+  var errorReason: String?
 
   var body: some View {
     VStack(spacing: 0) {
       StatusHeader(state: viewModel.state)
+      if let errorReason {
+        ErrorBanner(reason: errorReason, retry: viewModel.beginNewSession)
+      }
       List(viewModel.items) { item in
         ConversationBubble(item: item)
           .listRowSeparator(.hidden)
@@ -93,7 +107,7 @@ private struct ConversationView: View {
         .buttonStyle(.borderedProminent)
         .accessibilityLabel("녹음 종료")
         .padding(16)
-    case .finished:
+    case .finished, .error:
       Button("새 세션 시작", action: viewModel.beginNewSession)
         .buttonStyle(.borderedProminent)
         .accessibilityLabel("새 세션 시작")
@@ -103,6 +117,22 @@ private struct ConversationView: View {
         .accessibilityLabel("처리 중")
         .padding(16)
     }
+  }
+}
+
+private struct ErrorBanner: View {
+  let reason: String
+  let retry: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(reason)
+      Button("새 세션 시작", action: retry)
+        .accessibilityLabel("새 세션 시작")
+    }
+    .foregroundStyle(DesignToken.error)
+    .padding(12)
+    .accessibilityElement(children: .contain)
   }
 }
 
