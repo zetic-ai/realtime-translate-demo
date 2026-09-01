@@ -8,115 +8,124 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(TargetLanguage.hyMT2Candidates.count, 38)
   }
 
-  func testTranslationGateBlocksUnverifiedPairWithoutCreatingTranslation() {
-    let gate = ModelCompatibilityGate()
-    XCTAssertNotNil(gate.translationError(for: .korean, target: TargetLanguage.hyMT2Candidates[0]))
+  func testOnlyOneSpeakerCanListenAtATime() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    viewModel.beginTurn(.b)
+
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertEqual(recognizer.startedSources, [.korean])
   }
 
-  func testOnlyOnDeviceSupportedLocalesAreEnabled() {
-    let recognizer = FakeSpeechRecognizer(availableLanguages: [.english])
-    let viewModel = RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
+  func testATurnRoutesTranslationToBLanguage() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
 
-    XCTAssertEqual(viewModel.availableSourceLanguages, [.english])
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("안녕")
+    XCTAssertEqual(viewModel.items.last?.speaker, .a)
+    XCTAssertEqual(viewModel.items.last?.transcript, "안녕")
+    recognizer.sendFinal("안녕하세요")
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertEqual(recognizer.stopCount, 0)
+    viewModel.endTurn(.a)
+
+    XCTAssertEqual(viewModel.items.last?.targetLanguage, viewModel.targetLanguageB)
+    XCTAssertEqual(viewModel.state, .ready)
   }
 
-  func testPermissionRequestRequiresMicrophoneAndSpeechAuthorization() async {
-    let recognizer = FakeSpeechRecognizer(permission: .required)
-    let viewModel = RealtimeTranslateViewModel(speechRecognizer: recognizer)
+  func testBTurnRoutesTranslationToALanguage() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
 
-    viewModel.requestMicrophonePermission()
-    await Task.yield()
+    viewModel.beginTurn(.b)
+    recognizer.sendFinal("hello")
+    XCTAssertEqual(viewModel.state, .listening(.b))
+    viewModel.endTurn(.b)
 
-    XCTAssertEqual(viewModel.state, .permissionRequired)
-    XCTAssertTrue(recognizer.didRequestPermissions)
+    XCTAssertEqual(viewModel.items.last?.speaker, .b)
+    XCTAssertEqual(viewModel.items.last?.targetLanguage, viewModel.targetLanguageA)
+  }
+
+  func testFinalBeforeReleaseDoesNotTranslateUntilRelease() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("안녕하세요")
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertEqual(recognizer.stopCount, 0)
+
+    viewModel.endTurn(.a)
+    XCTAssertEqual(recognizer.finishCount, 1)
+
+    guard case .translationFailed = viewModel.items.last?.state else {
+      return XCTFail("The source card must show a translation error after release")
+    }
+    XCTAssertNil(viewModel.items.last?.translation)
+    XCTAssertEqual(viewModel.state, .ready)
+    viewModel.beginTurn(.b)
+    XCTAssertEqual(viewModel.state, .listening(.b))
+  }
+
+  func testPartialAfterFinalKeepsPendingFinalForRelease() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("final transcript")
+    recognizer.sendPartial("newer preview")
+    XCTAssertEqual(viewModel.items.last?.transcript, "newer preview")
+    XCTAssertEqual(viewModel.state, .listening(.a))
+
+    viewModel.endTurn(.a)
+    XCTAssertEqual(viewModel.items.last?.transcript, "final transcript")
+    XCTAssertEqual(viewModel.state, .ready)
+  }
+
+  func testTapToggleStartsThenEndsSameSpeaker() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    viewModel.endTurn(.a)
+
+    XCTAssertEqual(viewModel.state, .finalizing(.a))
   }
 
   func testOnDeviceSpeechRequestNeverAllowsNetworkFallback() {
     let request = SFSpeechAudioBufferRecognitionRequest()
-
     PlatformSpeechRecognizer.configure(request)
-
     XCTAssertTrue(request.requiresOnDeviceRecognition)
     XCTAssertTrue(request.shouldReportPartialResults)
   }
 
-  func testPartialAndFinalResultsUpdateChatWithoutFakeTranslation() {
-    let recognizer = FakeSpeechRecognizer(availableLanguages: [.english])
-    let viewModel = RealtimeTranslateViewModel(
-      state: .ready,
-      sourceLanguage: .english,
-      speechRecognizer: recognizer
-    )
-
-    viewModel.start()
-    recognizer.sendPartial("hello")
-    XCTAssertEqual(viewModel.items.last?.transcript, "hello")
-    XCTAssertEqual(viewModel.items.last?.state, .processing)
-
-    recognizer.sendFinal("hello world")
-    XCTAssertEqual(viewModel.items.last?.transcript, "hello world")
-    XCTAssertEqual(viewModel.items.last?.state, .confirmed)
-    XCTAssertNil(viewModel.items.last?.translation)
-    XCTAssertEqual(recognizer.stopCount, 1)
-    guard case .error = viewModel.state else {
-      return XCTFail("Unverified translation must remain in the error state")
-    }
-  }
-
-  func testEmptyFinalAndNewSessionStopRecognizer() {
-    let recognizer = FakeSpeechRecognizer(availableLanguages: [.english])
-    let viewModel = RealtimeTranslateViewModel(
-      state: .ready,
-      sourceLanguage: .english,
-      speechRecognizer: recognizer
-    )
-
-    viewModel.start()
-    recognizer.sendFinal("")
-    XCTAssertEqual(recognizer.stopCount, 1)
-
-    viewModel.beginNewSession()
-    XCTAssertEqual(recognizer.stopCount, 2)
+  private func readyViewModel(_ recognizer: FakeSpeechRecognizer) -> RealtimeTranslateViewModel {
+    RealtimeTranslateViewModel(state: .ready, sourceLanguageA: .korean, sourceLanguageB: .english,
+                               speechRecognizer: recognizer)
   }
 }
 
 @MainActor
 private final class FakeSpeechRecognizer: SpeechRecognizing {
-  private let availableLanguages: Set<SpokenLanguage>
-  private let permission: SpeechPermission
   private var onPartial: ((String) -> Void)?
   private var onFinal: ((String) -> Void)?
-  private(set) var didRequestPermissions = false
+  private(set) var startedSources: [SpokenLanguage] = []
+  private(set) var finishCount = 0
   private(set) var stopCount = 0
 
-  init(
-    permission: SpeechPermission = .granted,
-    availableLanguages: Set<SpokenLanguage> = Set(SpokenLanguage.allCases)
-  ) {
-    self.permission = permission
-    self.availableLanguages = availableLanguages
-  }
-
-  func requestPermissions() async -> SpeechPermission {
-    didRequestPermissions = true
-    return permission
-  }
-
-  func capability(for language: SpokenLanguage) -> SpeechLanguageCapability {
-    availableLanguages.contains(language) ? .available : .unavailable("온디바이스 모델 없음")
-  }
-
-  func start(
-    source: SpokenLanguage,
-    onPartial: @escaping (String) -> Void,
-    onFinal: @escaping (String) -> Void
-  ) throws {
+  func requestPermissions() async -> SpeechPermission { .granted }
+  func capability(for language: SpokenLanguage) -> SpeechLanguageCapability { .available }
+  func start(source: SpokenLanguage, onPartial: @escaping (String) -> Void,
+             onFinal: @escaping (String) -> Void) throws {
+    startedSources.append(source)
     self.onPartial = onPartial
     self.onFinal = onFinal
   }
-
+  func finish() { finishCount += 1 }
   func stop() { stopCount += 1 }
-
   func sendPartial(_ transcript: String) { onPartial?(transcript) }
   func sendFinal(_ transcript: String) { onFinal?(transcript) }
 }

@@ -36,6 +36,7 @@ protocol SpeechRecognizing: AnyObject {
     onPartial: @escaping (String) -> Void,
     onFinal: @escaping (String) -> Void
   ) throws
+  func finish()
   func stop()
 }
 
@@ -129,6 +130,15 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     recognitionTask = nil
     recognitionRequest = nil
     audioEngine = nil
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  func finish() {
+    audioEngine?.inputNode.removeTap(onBus: 0)
+    audioEngine?.stop()
+    recognitionRequest?.endAudio()
+    audioEngine = nil
+    recognitionRequest = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 

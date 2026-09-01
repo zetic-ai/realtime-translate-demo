@@ -1,64 +1,51 @@
-import AVFAudio
 import Foundation
 import UIKit
 
 @MainActor
 final class RealtimeTranslateViewModel: ObservableObject {
   @Published private(set) var state: SessionState
-  @Published var sourceLanguage: SpokenLanguage
-  @Published var targetLanguage: TargetLanguage
+  @Published var sourceLanguageA: SpokenLanguage
+  @Published var targetLanguageA: TargetLanguage
+  @Published var sourceLanguageB: SpokenLanguage
+  @Published var targetLanguageB: TargetLanguage
   @Published private(set) var items: [ConversationItem]
   @Published private(set) var availableSourceLanguages: [SpokenLanguage]
 
   private let speechRecognizer: any SpeechRecognizing
   private let modelGate = ModelCompatibilityGate()
+  private var activeItemID: UUID?
+  private var pendingFinalTranscript: String?
 
-  init(
-    state: SessionState = .permissionRequired,
-    sourceLanguage: SpokenLanguage = .korean,
-    targetLanguage: TargetLanguage = .hyMT2Candidates[0],
-    items: [ConversationItem] = [],
-    speechRecognizer: (any SpeechRecognizing)? = nil
-  ) {
-    let resolvedSpeechRecognizer = speechRecognizer ?? PlatformSpeechRecognizer()
-    let supportedLanguages = SpokenLanguage.allCases.filter {
-      if case .available = resolvedSpeechRecognizer.capability(for: $0) { return true }
+  init(state: SessionState = .permissionRequired, sourceLanguageA: SpokenLanguage = .korean,
+       targetLanguageA: TargetLanguage = .hyMT2Candidates[0], sourceLanguageB: SpokenLanguage = .english,
+       targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
+       speechRecognizer: (any SpeechRecognizing)? = nil) {
+    let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
+    let supported = SpokenLanguage.allCases.filter {
+      if case .available = recognizer.capability(for: $0) { return true }
       return false
     }
     self.state = state
-    self.sourceLanguage = supportedLanguages.contains(sourceLanguage)
-      ? sourceLanguage
-      : supportedLanguages.first ?? sourceLanguage
-    self.targetLanguage = targetLanguage
+    self.sourceLanguageA = supported.contains(sourceLanguageA) ? sourceLanguageA : supported.first ?? sourceLanguageA
+    self.targetLanguageA = targetLanguageA
+    self.sourceLanguageB = supported.contains(sourceLanguageB) ? sourceLanguageB : supported.first ?? sourceLanguageB
+    self.targetLanguageB = targetLanguageB
     self.items = items
-    self.speechRecognizer = resolvedSpeechRecognizer
-    self.availableSourceLanguages = supportedLanguages
+    self.speechRecognizer = recognizer
+    availableSourceLanguages = supported
   }
 
   static func fromLaunchArguments() -> RealtimeTranslateViewModel {
-    let arguments = ProcessInfo.processInfo.arguments
-    if arguments.contains("-uiState") {
-      let value = arguments.drop { $0 != "-uiState" }.dropFirst().first
-      if value == "recording" {
-        return RealtimeTranslateViewModel(state: .recording, items: Self.previewItems)
-      }
-      if value == "finished" {
-        return RealtimeTranslateViewModel(state: .finished, items: Self.previewItems)
-      }
-      if value == "processing" {
-        return RealtimeTranslateViewModel(state: .processing, items: Self.previewItems)
-      }
-      if value == "error" {
-        return RealtimeTranslateViewModel(state: .error("모델 호환성 검증이 완료되지 않았습니다."))
-      }
-      if value == "ready" {
-        return RealtimeTranslateViewModel(state: .ready)
-      }
-      if value == "permissionRequired" {
-        return RealtimeTranslateViewModel(state: .permissionRequired)
-      }
+    let value = ProcessInfo.processInfo.arguments.drop { $0 != "-uiState" }.dropFirst().first
+    switch value {
+    case "listeningA": return RealtimeTranslateViewModel(state: .listening(.a), items: previewItems)
+    case "finalizingA": return RealtimeTranslateViewModel(state: .finalizing(.a), items: previewItems)
+    case "translationError": return RealtimeTranslateViewModel(state: .ready, items: failedPreviewItems)
+    case "ended": return RealtimeTranslateViewModel(state: .ended, items: previewItems)
+    case "ready": return RealtimeTranslateViewModel(state: .ready)
+    case "permissionRequired": return RealtimeTranslateViewModel(state: .permissionRequired)
+    default: return RealtimeTranslateViewModel()
     }
-    return RealtimeTranslateViewModel()
   }
 
   func requestMicrophonePermission() {
@@ -70,38 +57,75 @@ final class RealtimeTranslateViewModel: ObservableObject {
   }
 
   func openAppSettings() {
-    guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
-    UIApplication.shared.open(settingsURL)
+    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+    UIApplication.shared.open(url)
   }
 
-  func start() {
-    guard availableSourceLanguages.contains(sourceLanguage) else {
-      state = .error("\(sourceLanguage.rawValue)의 온디바이스 음성 인식 모델을 사용할 수 없습니다.")
+  func beginTurn(_ speaker: Speaker) {
+    guard state == .ready else { return }
+    let language = sourceLanguage(for: speaker)
+    guard availableSourceLanguages.contains(language) else {
+      state = .error(
+        "\(speaker.rawValue)의 \(language.rawValue) 온디바이스 음성 인식 모델을 사용할 수 없습니다."
+      )
       return
     }
+    let item = ConversationItem(
+      id: UUID(), speaker: speaker, transcript: "", targetLanguage: targetLanguage(for: speaker.counterpart),
+      translation: nil, state: .partial
+    )
+    items.append(item)
+    activeItemID = item.id
+    pendingFinalTranscript = nil
     do {
       try speechRecognizer.start(
-        source: sourceLanguage,
-        onPartial: { [weak self] transcript in self?.receivePartial(transcript) },
-        onFinal: { [weak self] transcript in self?.receiveFinal(transcript) }
+        source: language,
+        onPartial: { [weak self] transcript in self?.receivePartial(transcript, speaker: speaker) },
+        onFinal: { [weak self] transcript in self?.receiveFinal(transcript, speaker: speaker) }
       )
-      state = .recording
+      state = .listening(speaker)
     } catch {
+      items.removeAll { $0.id == item.id }
+      activeItemID = nil
       speechRecognizer.stop()
       state = .error(error.localizedDescription)
     }
   }
 
-  func stop() {
-    state = .processing
+  func endTurn(_ speaker: Speaker) {
+    guard state == .listening(speaker) else { return }
+    state = .finalizing(speaker)
+    updateActiveItem { item in
+      ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
+                       targetLanguage: item.targetLanguage, translation: nil, state: .finalizing)
+    }
+    speechRecognizer.finish()
+    if let transcript = pendingFinalTranscript, state == .finalizing(speaker) {
+      completeTurn(transcript, speaker: speaker)
+    }
+  }
+
+  func endSession() {
     speechRecognizer.stop()
-    state = .finished
+    activeItemID = nil
+    pendingFinalTranscript = nil
+    state = .ended
   }
 
   func beginNewSession() {
     speechRecognizer.stop()
+    activeItemID = nil
+    pendingFinalTranscript = nil
     items = []
     state = .ready
+  }
+
+  private func sourceLanguage(for speaker: Speaker) -> SpokenLanguage {
+    speaker == .a ? sourceLanguageA : sourceLanguageB
+  }
+
+  private func targetLanguage(for speaker: Speaker) -> TargetLanguage {
+    speaker == .a ? targetLanguageA : targetLanguageB
   }
 
   private func refreshAvailableLanguages() {
@@ -109,47 +133,61 @@ final class RealtimeTranslateViewModel: ObservableObject {
       if case .available = speechRecognizer.capability(for: $0) { return true }
       return false
     }
-    if !availableSourceLanguages.contains(sourceLanguage), let first = availableSourceLanguages.first {
-      sourceLanguage = first
+  }
+
+  private func receivePartial(_ transcript: String, speaker: Speaker) {
+    guard !transcript.isEmpty, state == .listening(speaker) else { return }
+    updateActiveItem { item in
+      ConversationItem(id: item.id, speaker: speaker, transcript: transcript,
+                       targetLanguage: item.targetLanguage, translation: nil, state: .partial)
     }
   }
 
-  private func receivePartial(_ transcript: String) {
+  private func receiveFinal(_ transcript: String, speaker: Speaker) {
+    guard state == .listening(speaker) || state == .finalizing(speaker) else { return }
     guard !transcript.isEmpty else { return }
-    if let last = items.last, last.state == .processing {
-      items[items.count - 1] = ConversationItem(
-        id: last.id, speaker: nil, transcript: transcript, translation: nil, state: .processing
+    pendingFinalTranscript = transcript
+    guard state == .finalizing(speaker) else { return }
+    completeTurn(transcript, speaker: speaker)
+  }
+
+  private func completeTurn(_ transcript: String, speaker: Speaker) {
+    guard state == .finalizing(speaker) else { return }
+    let target = targetLanguage(for: speaker.counterpart)
+    updateActiveItem { item in
+      ConversationItem(id: item.id, speaker: speaker, transcript: transcript,
+                       targetLanguage: target, translation: nil, state: .finalizing)
+    }
+    state = .translating(speaker)
+    speechRecognizer.stop()
+    if let reason = modelGate.translationError(for: sourceLanguage(for: speaker), target: target) {
+      updateActiveItem { item in
+      ConversationItem(
+        id: item.id, speaker: item.speaker, transcript: item.transcript,
+        targetLanguage: item.targetLanguage, translation: nil, state: .translationFailed(reason)
       )
-    } else {
-      items.append(
-        ConversationItem(id: UUID(), speaker: nil, transcript: transcript, translation: nil, state: .processing)
-      )
+      }
+      activeItemID = nil
+      pendingFinalTranscript = nil
+      state = .ready
     }
   }
 
-  private func receiveFinal(_ transcript: String) {
-    guard !transcript.isEmpty else {
-      speechRecognizer.stop()
-      state = .error("온디바이스 음성 인식 결과를 받을 수 없습니다. 언어 모델을 확인한 뒤 다시 시도해 주세요.")
-      return
-    }
-    if let last = items.last, last.state == .processing {
-      items[items.count - 1] = ConversationItem(
-        id: last.id, speaker: nil, transcript: transcript, translation: nil, state: .confirmed
-      )
-    } else {
-      items.append(
-        ConversationItem(id: UUID(), speaker: nil, transcript: transcript, translation: nil, state: .confirmed)
-      )
-    }
-    if let reason = modelGate.translationError(for: sourceLanguage, target: targetLanguage) {
-      speechRecognizer.stop()
-      state = .error(reason)
-    }
+  private func updateActiveItem(_ update: (ConversationItem) -> ConversationItem) {
+    guard let id = activeItemID, let index = items.firstIndex(where: { $0.id == id }) else { return }
+    items[index] = update(items[index])
   }
 
   private static let previewItems = [
-    ConversationItem(id: UUID(), speaker: "화자 1", transcript: "안녕하세요.", translation: "Hello.", state: .confirmed),
-    ConversationItem(id: UUID(), speaker: nil, transcript: "반갑습니다", translation: nil, state: .processing)
+    ConversationItem(
+      id: UUID(), speaker: .a, transcript: "안녕하세요.", targetLanguage: .hyMT2Candidates[1],
+      translation: "Hello.", state: .translated
+    )
+  ]
+  private static let failedPreviewItems = [
+    ConversationItem(
+      id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9], translation: nil,
+      state: .translationFailed("SJ_zetic/Hy-MT2-1.8B 런타임과 아티팩트 호환성 검증이 완료되지 않았습니다.")
+    )
   ]
 }

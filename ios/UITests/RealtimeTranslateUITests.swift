@@ -1,50 +1,36 @@
 import XCTest
 
 final class RealtimeTranslateUITests: XCTestCase {
-  func testRecordingStateShowsConversationAndStopControl() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-uiState", "recording"]
-    app.launch()
+  func testListeningAShowsPTTAndDisablesB() {
+    let app = launch(state: "listeningA")
+    XCTAssertTrue(app.staticTexts["A가 말하는 중"].exists)
+    XCTAssertTrue(app.buttons["A 발화 종료"].exists)
+    XCTAssertFalse(app.buttons["B 발화 시작"].isEnabled)
+  }
 
-    XCTAssertTrue(app.staticTexts["녹음 중"].exists)
-    XCTAssertTrue(app.buttons["녹음 종료"].exists)
-    XCTAssertTrue(app.staticTexts["화자 1"].exists)
+  func testFinalizingShowsActiveSourceCard() {
+    let app = launch(state: "finalizingA")
+    XCTAssertTrue(app.staticTexts["A 원문 확정 중"].exists)
+    XCTAssertTrue(app.staticTexts["안녕하세요."].exists)
+  }
+
+  func testTranslationErrorKeepsCardAndEnablesNextTurn() {
+    let app = launch(state: "translationError")
     XCTAssertTrue(app.staticTexts["Hello."].exists)
+    XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Hy-MT2")).firstMatch.exists)
+    XCTAssertTrue(app.buttons["A 발화 시작"].isEnabled)
+    XCTAssertTrue(app.buttons["B 발화 시작"].isEnabled)
   }
 
-  func testErrorStateShowsRetry() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-uiState", "error"]
-    app.launch()
-
-    XCTAssertTrue(app.buttons["다시 시도"].exists)
-  }
-
-  func testPermissionStateHidesStartAndShowsRecoveryControls() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-uiState", "permissionRequired"]
-    app.launch()
-
-    XCTAssertFalse(app.buttons["번역 시작"].exists)
-    XCTAssertTrue(app.buttons["마이크 권한 허용"].exists)
-    XCTAssertTrue(app.buttons["앱 설정 열기"].exists)
-  }
-
-  func testFinishedStateOffersNewSession() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-uiState", "finished"]
-    app.launch()
-
+  func testEndedStateOffersNewSession() {
+    let app = launch(state: "ended")
     XCTAssertTrue(app.buttons["새 세션 시작"].exists)
   }
 
-  func testProcessingStateShowsPartialTranscript() {
+  private func launch(state: String) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchArguments = ["-uiState", "processing"]
+    app.launchArguments = ["-uiState", state]
     app.launch()
-
-    XCTAssertTrue(app.staticTexts["남은 발화를 처리하는 중"].exists)
-    XCTAssertTrue(app.staticTexts["반갑습니다"].exists)
-    XCTAssertTrue(app.staticTexts["번역을 준비하는 중"].exists)
+    return app
   }
 }

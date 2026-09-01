@@ -1,20 +1,32 @@
 import Foundation
 
+// swiftlint:disable identifier_name
+enum Speaker: String, CaseIterable, Identifiable {
+  case a = "A"
+  case b = "B"
+
+  var id: String { rawValue }
+  var counterpart: Speaker { self == .a ? .b : .a }
+}
+// swiftlint:enable identifier_name
+
 enum SessionState: Equatable {
   case permissionRequired
   case ready
-  case recording
-  case processing
-  case finished
+  case listening(Speaker)
+  case finalizing(Speaker)
+  case translating(Speaker)
+  case ended
   case error(String)
 
   var title: String {
     switch self {
     case .permissionRequired: "마이크 권한 필요"
-    case .ready: "시작할 준비가 되었습니다"
-    case .recording: "녹음 중"
-    case .processing: "남은 발화를 처리하는 중"
-    case .finished: "세션이 종료되었습니다"
+    case .ready: "대화 준비됨"
+    case let .listening(speaker): "\(speaker.rawValue)가 말하는 중"
+    case let .finalizing(speaker): "\(speaker.rawValue) 원문 확정 중"
+    case let .translating(speaker): "\(speaker.counterpart.rawValue)에게 번역 중"
+    case .ended: "세션이 종료되었습니다"
     case .error: "처리할 수 없습니다"
     }
   }
@@ -36,8 +48,6 @@ struct TargetLanguage: Identifiable, Hashable {
   let name: String
   var id: String { code }
 
-  // Candidate catalog supplied for Hy-MT2-1.8B integration. It remains unavailable
-  // to the user until ModelCompatibilityGate has device evidence for a pair.
   static let hyMT2Candidates = [
     ("zh", "중국어"), ("en", "영어"), ("fr", "프랑스어"), ("pt", "포르투갈어"),
     ("es", "스페인어"), ("ja", "일본어"), ("tr", "터키어"), ("ru", "러시아어"),
@@ -60,10 +70,11 @@ extension TargetLanguage {
 }
 
 struct ConversationItem: Identifiable, Equatable {
-  enum DeliveryState: String, Equatable { case processing, confirmed }
+  enum DeliveryState: Equatable { case partial, finalizing, translationFailed(String), translated }
   let id: UUID
-  let speaker: String?
+  let speaker: Speaker
   let transcript: String
+  let targetLanguage: TargetLanguage
   let translation: String?
   let state: DeliveryState
 }
