@@ -15,6 +15,9 @@ targets:
     type: application
     platform: iOS
     sources: [Sources]
+    configFiles:
+      Debug: Config/Melange.xcconfig
+      Release: Config/Melange.xcconfig
     dependencies:
       - package: ZeticMLangeiOS
         product: ZeticMLange

@@ -21,4 +21,19 @@ STT uses Android and iOS on-device speech recognition. A speaker can choose `Aut
 
 At session start, both apps load `SJ_zetic/Hy-MT2-1.8B` with Melange SDK `1.10.0`. Model loading exposes progress, failure, and retry states; the PTT controls become available only after the model is ready. Finalized source text is translated serially through the loaded model. Ending a session waits for model cleanup and close, then clears the prior conversation and returns to setup.
 
-The Melange personal key is supplied from the build environment as `MELANGE_PERSONAL_KEY`. It is absent from source control and logs, but is embedded in a development app binary to initialize the SDK. That approach is not appropriate for production distribution; production requires rotatable credential provisioning. Do not commit the key, model artifacts, or other credentials. The existing Android application ID, iOS bundle ID, and iOS signing configuration remain unchanged.
+## Melange personal key setup
+
+Create a personal key directly from the authenticated [Melange Personal Access Token settings](https://melange.zetic.ai/settings?tab=pat) page. Do not share or commit the key.
+
+From the repository root, run:
+
+```sh
+./setup.sh
+```
+
+The script uses a pre-set `MELANGE_PERSONAL_KEY` when available; otherwise, it requests the key with a hidden terminal prompt. It writes these ignored, owner-read/write-only local files:
+
+- `android/.melange.local.properties`
+- `ios/Config/Melange.local.xcconfig`
+
+Run `./setup.sh` again to rotate the key. Android reads `MELANGE_PERSONAL_KEY` from the build environment before its local file. For iOS or CI, set `MELANGE_PERSONAL_KEY`, run `./setup.sh` to materialize the ignored Xcode configuration, then build. The key is embedded in development app binaries for SDK initialization, so never distribute those binaries. Production distribution requires rotatable credential provisioning. The existing Android application ID, iOS bundle ID, and iOS signing configuration remain unchanged.

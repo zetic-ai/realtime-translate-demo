@@ -41,7 +41,7 @@ The app does not preflight or gate a source language. If the platform cannot sta
 - One device does not support simultaneous A/B speech or concurrent STT sessions. The opposite button is disabled while an utterance is active.
 - Automatic speaker separation, separate voice models, additional audio fan-out, and persistent storage of audio or conversations are out of scope.
 - Accounts, sign-in, cloud sync, export or sharing, and telephone-call recording are out of scope.
-- The Melange personal key is supplied as `MELANGE_PERSONAL_KEY` through the build environment. It is absent from source control and logs, but embedded into a development app binary for SDK initialization. That approach is not suitable for production distribution, which requires rotatable credential provisioning. Application and bundle identifiers and iOS signing configuration remain unchanged.
+- Configure `MELANGE_PERSONAL_KEY` through the root `./setup.sh` script. Android gives a build-environment value precedence over its local file; for iOS or CI, set the variable and run `./setup.sh` before building so Xcode reads the ignored local configuration. It is absent from source control and logs, but embedded into a development app binary for SDK initialization. That approach is not suitable for production distribution, which requires rotatable credential provisioning. Application and bundle identifiers and iOS signing configuration remain unchanged.
 
 ## Completion criteria
 

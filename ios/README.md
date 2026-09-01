@@ -2,4 +2,4 @@
 
 The iOS implementation uses Swift and SwiftUI. Screen state, design tokens, and accessibility rules follow the [shared UX and design specification](../docs/shared-ux-spec.md).
 
-For a device build, provide `MELANGE_PERSONAL_KEY` as an Xcode build environment variable. The value is expanded into the built app's `Info.plist` so the installed demo can load its model; it is not tracked in this repository. Treat that demo artifact as credential-bearing and do not distribute it.
+Before a device build, create a personal key directly from the authenticated [Melange Personal Access Token settings](https://melange.zetic.ai/settings?tab=pat) page and run `./setup.sh` from the repository root. The script creates the ignored, owner-read/write-only `ios/Config/Melange.local.xcconfig` file, which Xcode reads automatically. For iOS or CI, set `MELANGE_PERSONAL_KEY` and run `./setup.sh` before building. Run the script again to rotate the key. The key is expanded into the development app's `Info.plist`; never commit, share, or distribute that binary.

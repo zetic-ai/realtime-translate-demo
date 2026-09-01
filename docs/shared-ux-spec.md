@@ -70,7 +70,7 @@ If platform STT reports a final result before the user stops an utterance, the a
 - The translation request uses the documented flat one-user-message Hy-MT2 prompt, including its blank line and Hy control tokens. Melange accepts that rendered request as a `String`; the app manually renders the required flat template rather than passing a chat-message object. If inference fails, the app preserves the source card and shows an error and recovery action instead of an invented translation or an empty translation bubble.
 - Hy-MT2 requests are serial. A queued card displays the recipient and `Translation pending`.
 - Ending a session waits for the loaded model to clean up and close, clears the prior conversation, and then returns to target-language setup. View-model teardown also releases the model.
-- `MELANGE_PERSONAL_KEY` is supplied through the build environment and must not appear in source control or logs. Development builds embed it for SDK initialization; production distribution requires rotatable credential provisioning.
+- Configure `MELANGE_PERSONAL_KEY` with the root `./setup.sh` script. Android gives a build-environment value precedence over its local file; iOS and CI must set the variable and run `./setup.sh` before building so Xcode reads the ignored local configuration. The key must not appear in source control or logs. Development builds embed it for SDK initialization; production distribution requires rotatable credential provisioning.
 
 ## Design tokens
 

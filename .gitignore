@@ -6,6 +6,7 @@
 android/.gradle/
 android/build/
 android/app/build/
+android/.melange.local.properties
 *.apk
 *.aab
 
@@ -13,6 +14,7 @@ android/app/build/
 ios/DerivedData/
 ios/build/
 ios/Pods/
+ios/Config/Melange.local.xcconfig
 *.xcuserstate
 
 # Local model artifacts and credentials

@@ -1,7 +1,45 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val localMelangePersonalKey = rootProject.file(".melange.local.properties")
+    .takeIf { it.isFile }
+    ?.inputStream()
+    ?.use { input ->
+        Properties().apply { load(input) }.getProperty("MELANGE_PERSONAL_KEY").orEmpty()
+    }
+    .orEmpty()
+
+val melangePersonalKey = providers.environmentVariable("MELANGE_PERSONAL_KEY")
+    .orNull
+    ?.takeIf { it.isNotBlank() }
+    ?: localMelangePersonalKey
+
+fun String.asJavaStringLiteral(): String = buildString {
+    append('"')
+    this@asJavaStringLiteral.forEach { character ->
+        when (character) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            '\b' -> append("\\b")
+            '\u000C' -> append("\\f")
+            else -> {
+                if (character.code < 0x20) {
+                    append("\\${character.code.toString(8).padStart(3, '0')}")
+                } else {
+                    append(character)
+                }
+            }
+        }
+    }
+    append('"')
 }
 
 android {
@@ -15,8 +53,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        val personalKey = providers.environmentVariable("MELANGE_PERSONAL_KEY").orNull.orEmpty()
-        buildConfigField("String", "MELANGE_PERSONAL_KEY", "\"${personalKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "MELANGE_PERSONAL_KEY", melangePersonalKey.asJavaStringLiteral())
     }
 
     buildFeatures {

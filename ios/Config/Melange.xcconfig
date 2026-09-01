@@ -1,0 +1,4 @@
+// The optional local file is written by ../../setup.sh and intentionally ignored by Git.
+// Keep this default empty so clean checkouts build without a personal key.
+MELANGE_PERSONAL_KEY =
+#include? "Melange.local.xcconfig"
