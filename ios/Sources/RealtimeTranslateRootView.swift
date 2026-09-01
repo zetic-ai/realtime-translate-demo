@@ -16,15 +16,17 @@ struct RealtimeTranslateRootView: View {
     NavigationStack {
       Group {
         switch viewModel.state {
-        case .permissionRequired:
+        case .permissionRequired, .setup, .loadingModel, .modelLoadFailed, .ended:
           SetupView(viewModel: viewModel)
+        case .endingSession:
+          EndingSessionView()
         case .error where viewModel.items.isEmpty:
           ErrorView(reason: errorReason, retry: viewModel.requestMicrophonePermission)
         default:
           ConversationView(viewModel: viewModel)
         }
       }
-      .navigationTitle("Realtime Translate")
+      .navigationTitle("Turn Translate")
     }
     .tint(DesignToken.primary)
   }
@@ -32,6 +34,13 @@ struct RealtimeTranslateRootView: View {
   private var errorReason: String {
     if case let .error(reason) = viewModel.state { return reason }
     return "Unable to process the request."
+  }
+}
+
+private struct EndingSessionView: View {
+  var body: some View {
+    ProgressView("Closing translation session...")
+      .accessibilityIdentifier("closing-session")
   }
 }
 
@@ -48,6 +57,34 @@ private struct SetupView: View {
         Button("Allow Microphone Access", action: viewModel.requestMicrophonePermission)
         Button("Open App Settings", action: viewModel.openAppSettings)
       }
+      sessionSection
+    }
+  }
+
+  @ViewBuilder private var sessionSection: some View {
+    switch viewModel.state {
+    case .setup, .ended:
+      Section {
+        Button("Start Session", action: viewModel.startSession)
+          .buttonStyle(.borderedProminent)
+          .accessibilityIdentifier("start-session")
+      } footer: {
+        Text("The translation model loads on this device before either speaker can talk.")
+      }
+    case let .loadingModel(progress):
+      Section("Preparing Translation") {
+        ProgressView(value: progress)
+        Text(progress.map { "Downloading model \(Int($0 * 100))%" } ?? "Loading model...")
+      }
+    case let .modelLoadFailed(reason):
+      Section("Translation Model Unavailable") {
+        Text(reason).foregroundStyle(DesignToken.error)
+        Button("Retry Model Load", action: viewModel.startSession)
+          .buttonStyle(.borderedProminent)
+          .accessibilityIdentifier("retry-model-load")
+      }
+    default:
+      EmptyView()
     }
   }
 
@@ -58,10 +95,12 @@ private struct SetupView: View {
       Picker("\(speaker.rawValue) Spoken Language", selection: source) {
         ForEach(viewModel.availableSourceLanguages) { Text($0.name).tag($0) }
       }
+      .disabled(!viewModel.canEditSessionSettings)
       .accessibilityIdentifier("source-language-\(speaker.rawValue)")
       Picker("Translation Language for \(speaker.rawValue)", selection: target) {
         ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
       }
+      .disabled(!viewModel.canEditSessionSettings)
       .accessibilityIdentifier("target-language-\(speaker.rawValue)")
     }
   }
@@ -82,9 +121,7 @@ private struct ConversationView: View {
   private var controls: some View {
     VStack(spacing: 8) {
       if case .error = viewModel.state { ErrorBanner(reason: "Try speech recognition again or check Settings.") }
-      if viewModel.state == .ended {
-        Button("Start New Session", action: viewModel.beginNewSession).buttonStyle(.borderedProminent)
-      } else {
+      if viewModel.state != .ended {
         HStack(spacing: 12) {
           PTTButton(speaker: .a, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
           PTTButton(speaker: .b, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)

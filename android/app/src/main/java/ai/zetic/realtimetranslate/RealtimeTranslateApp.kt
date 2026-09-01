@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -26,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +45,7 @@ import androidx.compose.ui.unit.sp
 
 sealed interface UiAction {
     data object RequestPermission : UiAction
+    data class SelectInput(val speaker: Speaker, val language: SpeechLanguage) : UiAction
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
     data object StartConversation : UiAction
     data object EndSession : UiAction
@@ -53,8 +57,9 @@ sealed interface UiAction {
 
 fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RequestPermission -> SessionAction.Retry
+    is UiAction.SelectInput -> SessionAction.InputLanguageChanged(speaker, language)
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
-    UiAction.StartConversation -> SessionAction.StartConversation
+    UiAction.StartConversation -> SessionAction.StartConversation(context)
     UiAction.EndSession -> SessionAction.EndSession
     is UiAction.PttPress -> SessionAction.PttPress(context, speaker)
     is UiAction.PttRelease -> SessionAction.PttRelease(speaker)
@@ -68,10 +73,13 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Realtime Translate", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Turn Translate", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         StatusHeader(state)
         when {
             state.phase == SessionPhase.PermissionRequired -> PermissionPanel(state, onAction, onOpenAppSettings)
+            state.phase == SessionPhase.LoadingModel -> ModelLoadingPanel(state)
+            state.phase == SessionPhase.EndingSession -> ModelEndingPanel()
+            state.phase == SessionPhase.ModelLoadFailed -> ModelLoadErrorPanel(state, onAction)
             state.phase == SessionPhase.Error -> ErrorPanel(state, onAction)
             !state.conversationStarted -> SetupPanel(state, onAction)
             else -> ConversationPanel(state, onAction)
@@ -82,6 +90,9 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
 @Composable private fun StatusHeader(state: SessionUiState) {
     val label = when (state.phase) {
         SessionPhase.PermissionRequired -> "Microphone permission required"
+        SessionPhase.LoadingModel -> "Preparing translation model"
+        SessionPhase.EndingSession -> "Ending session"
+        SessionPhase.ModelLoadFailed -> "Translation model unavailable"
         SessionPhase.Ready -> if (state.conversationStarted) "Conversation ready" else "Conversation setup"
         SessionPhase.ListeningA -> "Speaker A is speaking"
         SessionPhase.ListeningB -> "Speaker B is speaking"
@@ -103,6 +114,24 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     else Button(onClick = { onAction(UiAction.RequestPermission) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Request microphone permission" }) { Text("Allow microphone") }
 }
 
+@Composable private fun ModelLoadingPanel(state: SessionUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Loading translation model ${(state.modelLoadProgress * 100).toInt()}%")
+        Text("Speaker controls will unlock when the model is ready.", color = TextSecondary, fontSize = 12.sp)
+    }
+}
+
+@Composable private fun ModelLoadErrorPanel(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(state.errorMessage.orEmpty(), color = Error)
+        Button(onClick = { onAction(UiAction.Retry) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Retry model load" }) { Text("Retry") }
+    }
+}
+
+@Composable private fun ModelEndingPanel() {
+    Text("Unloading translation model", color = TextSecondary, fontSize = 12.sp)
+}
+
 @Composable private fun SetupPanel(state: SessionUiState, onAction: (UiAction) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SpeakerSetup(Speaker.A, state, onAction)
@@ -116,11 +145,14 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     Card(colors = CardDefaults.cardColors(containerColor = SurfaceMuted), shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Speaker ${speaker.label}", fontWeight = FontWeight.Bold)
-            Text("Recognition language", color = TextSecondary, fontSize = 12.sp)
-            Text(
+            LanguagePicker(
+                "Speaker ${speaker.label} recognition language",
                 settings.inputLanguage.displayName,
-                modifier = Modifier.semantics { contentDescription = "Speaker ${speaker.label} recognition language: ${settings.inputLanguage.displayName}" },
+                state.speechLanguages.map { it.displayName to UiAction.SelectInput(speaker, it) },
+                onAction,
             )
+            if (state.speechLanguageCatalogLoading) Text("Checking installed on-device languages", color = TextSecondary, fontSize = 12.sp)
+            state.speechLanguageCatalogMessage?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
             LanguagePicker("Speaker ${speaker.label} translation language", settings.readingLanguage.displayName, HyMt2Languages.all.map { it.displayName to UiAction.SelectReading(speaker, it) }, onAction)
         }
     }
@@ -137,8 +169,12 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     }
 }
 
-@Composable private fun ConversationPanel(state: SessionUiState, onAction: (UiAction) -> Unit) {
-    LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
+@Composable private fun ColumnScope.ConversationPanel(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    val conversationListState = rememberLazyListState()
+    LaunchedEffect(state.conversations.size) {
+        if (state.conversations.isNotEmpty()) conversationListState.animateScrollToItem(state.conversations.lastIndex)
+    }
+    LazyColumn(Modifier.fillMaxWidth().weight(1f), state = conversationListState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
         items(state.conversations, key = { it.id }) { MessageBubble(it) }
         if (state.conversations.isEmpty()) item { Text("Speaker A or B can begin speaking.", color = TextSecondary) }
     }

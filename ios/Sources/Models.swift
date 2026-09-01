@@ -12,6 +12,10 @@ enum Speaker: String, CaseIterable, Identifiable {
 
 enum SessionState: Equatable {
   case permissionRequired
+  case setup
+  case loadingModel(Double?)
+  case modelLoadFailed(String)
+  case endingSession
   case ready
   case listening(Speaker)
   case finalizing(Speaker)
@@ -22,6 +26,10 @@ enum SessionState: Equatable {
   var title: String {
     switch self {
     case .permissionRequired: "Microphone Permission Required"
+    case .setup: "Set Up a Session"
+    case .loadingModel: "Preparing Translation"
+    case .modelLoadFailed: "Translation Model Unavailable"
+    case .endingSession: "Closing Translation Session"
     case .ready: "Ready to Talk"
     case let .listening(speaker): "\(speaker.rawValue) is speaking"
     case let .finalizing(speaker): "Finalizing \(speaker.rawValue)'s transcript"
@@ -62,12 +70,18 @@ struct TargetLanguage: Identifiable, Hashable {
 
 struct HyMT2Request: Equatable {
   let userMessage: String
+  let flatPrompt: String
 
   init(sourceText: String, targetLanguage: TargetLanguage) {
     let instruction = "Translate the following text into \(targetLanguage.name). "
       + "Note that you should only output the translated result without any additional explanation:"
-    userMessage = "\(instruction)\n\(sourceText)"
+    userMessage = "\(instruction)\n\n\(sourceText)"
+    flatPrompt = HyMT2Request.beginOfSentence + HyMT2Request.user + userMessage + HyMT2Request.assistant
   }
+
+  private static let beginOfSentence = "<\u{FF5C}hy_begin\u{2581}of\u{2581}sentence\u{FF5C}>"
+  private static let user = "<\u{FF5C}hy_User\u{FF5C}>"
+  private static let assistant = "<\u{FF5C}hy_Assistant\u{FF5C}>"
 }
 
 extension TargetLanguage {

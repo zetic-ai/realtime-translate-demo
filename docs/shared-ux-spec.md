@@ -6,14 +6,15 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 ## Screen structure
 
-1. **Speaker setup**: `Automatic` or an OS-provided recognition language and a reading language for A and B, microphone and speech-recognition permission state, and a `Start conversation` button.
-2. **Conversation**: A state header, chronologically ordered utterance cards, and A/B push-to-talk buttons at the bottom.
-3. **Error guidance**: The affected speaker, language, and cause, with `Try again` or `Open settings` actions.
+1. **Speaker setup**: `Automatic` or an OS-derived on-device recognition language and a reading language for A and B, microphone and speech-recognition permission state, and a `Start session` button.
+2. **Model loading**: A model-loading state with progress, failure, and retry. Push-to-talk remains unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
+3. **Conversation**: A state header, chronologically ordered utterance cards, and A/B push-to-talk buttons at the bottom.
+4. **Error guidance**: The affected speaker, language, and cause, with `Try again` or `Open settings` actions.
 
 ### Conversation layout
 
 ```text
-Status header: "Conversation ready" | "A is speaking" | "Translating"
+Status header: "Loading model" | "Conversation ready" | "A is speaking" | "Translating"
 
 [ A - Automatic ]              [ B - Device language ]
   Hello                         Hello
@@ -33,13 +34,17 @@ Status header: "Conversation ready" | "A is speaking" | "Translating"
 
 | State | Display | Allowed actions | Next state |
 | --- | --- | --- | --- |
-| `permissionRequired` | Permission needed | Request permission, open settings | `ready`, `error` |
-| `ready` | A/B controls available | Start A or B, change language | `listeningA`, `listeningB` |
+| `permissionRequired` | Permission needed | Request permission, open settings | `setup`, `error` |
+| `setup` | Language selections and session start | Start session, change language | `modelLoading`, `permissionRequired`, `error` |
+| `modelLoading` | Model download and load progress | Wait | `ready`, `modelLoadFailed` |
+| `ready` | A/B controls available | Start A or B, end session | `listeningA`, `listeningB`, `modelUnloading` |
 | `listeningA` | `A is speaking` and A partial card | Stop A | `finalizingA`, `error` |
 | `listeningB` | `B is speaking` and B partial card | Stop B | `finalizingB`, `error` |
 | `finalizingA` / `finalizingB` | `Finalizing A/B source text` | Wait for completion | `translatingA`, `translatingB`, `error` |
 | `translatingA` / `translatingB` | `Translating for B/A` | Wait for completion | `ready`, `error` |
-| `error` | Failure cause and recovery action; existing cards remain | Retry, open settings | `ready`, `permissionRequired` |
+| `modelUnloading` | Ending session | Wait | Clear the prior conversation after cleanup and close, then enter `setup` |
+| `modelLoadFailed` | Model-load failure and retry action | Retry model load | `modelLoading` |
+| `error` | Failure cause and recovery action; existing cards remain | Retry, open settings, end session | `ready`, `setup`, `permissionRequired` |
 
 If platform STT reports a final result before the user stops an utterance, the app stores it only as the active card's pending transcript. The app leaves `listening*` for `finalizing*` and starts finalization and translation only after a button release or tap-toggle stop. If there is no finalized source text, no card completes and the app returns to `ready`. A translation error leaves the finalized source card visible and shows an error state in the translation area.
 
@@ -52,16 +57,20 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 ## On-device STT prerequisites
 
-- The source-language selector is not limited by the app. It provides `Automatic` and the recognition languages offered by the platform.
-- Android and iOS use on-device recognition only. Device, OS, permissions, and downloaded speech assets determine whether a requested recognition language can start.
-- The app does not preflight or gate a source language. If the platform cannot start recognition, it enters `error` with guidance. Network STT fallback is never used.
+- The source-language selector is not limited by an app-defined whitelist.
+- Android API 33 and later lists installed on-device recognition locales. Android API 31-32 offers `Automatic` because installed-locale discovery is unavailable.
+- iOS lists only `SFSpeechRecognizer` supported locales that are on-device capable.
+- Android and iOS use on-device recognition only. The app does not download speech models, preflight source-language compatibility, or fall back to online STT. If the platform cannot start recognition, it enters `error` with guidance.
 
 ## Translation execution
 
 - A and B reading-language selectors show all 38 options from the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
+- Starting a session asynchronously downloads and loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. Loading failure reports a retryable error and never enables PTT.
 - Translation runs only for finalized source text: A translates to B's reading language and B translates to A's reading language.
-- The translation request uses the documented one-user-message Hy-MT2 prompt. If the runtime is unavailable or fails, the app preserves the source card and shows an error and recovery action instead of an invented translation or an empty translation bubble.
+- The translation request uses the documented flat one-user-message Hy-MT2 prompt, including its blank line and Hy control tokens. Melange accepts that rendered request as a `String`; the app manually renders the required flat template rather than passing a chat-message object. If inference fails, the app preserves the source card and shows an error and recovery action instead of an invented translation or an empty translation bubble.
 - Hy-MT2 requests are serial. A queued card displays the recipient and `Translation pending`.
+- Ending a session waits for the loaded model to clean up and close, clears the prior conversation, and then returns to target-language setup. View-model teardown also releases the model.
+- `MELANGE_PERSONAL_KEY` is supplied through the build environment and must not appear in source control or logs. Development builds embed it for SDK initialization; production distribution requires rotatable credential provisioning.
 
 ## Design tokens
 
@@ -88,10 +97,12 @@ Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visua
 | --- | --- |
 | Start A | A partial card and active-A state; B control disabled |
 | Start B | B partial card and active-B state; A control disabled |
+| Start session | Model progress is visible; PTT remains disabled until model ready |
 | Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language |
 | Translation succeeds | Source text, target language, and translated text appear in one card |
 | STT unsupported or permission denied | Do not start; show cause and recovery action; do not switch to network recognition |
-| Translation runtime unverified or fails | Preserve source text; do not invent a translation; show translation error and retry |
+| Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error |
+| End session | Wait for model cleanup and close, clear the prior conversation, then return to target-language setup |
 
 ## Verification
 

@@ -12,14 +12,17 @@ final class RealtimeTranslateViewModel: ObservableObject {
   @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
 
   private let speechRecognizer: any SpeechRecognizing
+  private let translationRuntime: any TranslationRuntime
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
+  private var sessionTask: Task<Void, Never>?
   private(set) var mostRecentTranslationRequest: HyMT2Request?
 
   init(state: SessionState = .permissionRequired, sourceLanguageA: SpeechSourceLanguage = .automatic,
        targetLanguageA: TargetLanguage = .hyMT2Candidates[0], sourceLanguageB: SpeechSourceLanguage = .automatic,
        targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
-       speechRecognizer: (any SpeechRecognizing)? = nil) {
+       speechRecognizer: (any SpeechRecognizing)? = nil,
+       translationRuntime: (any TranslationRuntime)? = nil) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     self.state = state
@@ -29,6 +32,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.targetLanguageB = targetLanguageB
     self.items = items
     self.speechRecognizer = recognizer
+    self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
     availableSourceLanguages = supported
   }
 
@@ -39,6 +43,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
     case "finalizingA": return RealtimeTranslateViewModel(state: .finalizing(.a), items: previewItems)
     case "translationError": return RealtimeTranslateViewModel(state: .ready, items: failedPreviewItems)
     case "ended": return RealtimeTranslateViewModel(state: .ended, items: previewItems)
+    case "loadingModel": return RealtimeTranslateViewModel(state: .loadingModel(0.5))
+    case "modelLoadFailed": return RealtimeTranslateViewModel(state: .modelLoadFailed("Try again."))
     case "ready": return RealtimeTranslateViewModel(state: .ready)
     case "permissionRequired": return RealtimeTranslateViewModel(state: .permissionRequired)
     default: return RealtimeTranslateViewModel()
@@ -49,13 +55,35 @@ final class RealtimeTranslateViewModel: ObservableObject {
     Task {
       let permission = await speechRecognizer.requestPermissions()
       refreshAvailableLanguages()
-      state = permission == .granted ? .ready : .permissionRequired
+      state = permission == .granted ? .setup : .permissionRequired
     }
   }
 
   func openAppSettings() {
     guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
     UIApplication.shared.open(url)
+  }
+
+  func startSession() {
+    guard state == .setup || isModelLoadFailure else { return }
+    sessionTask?.cancel()
+    state = .loadingModel(nil)
+    sessionTask = Task { [weak self] in
+      guard let self else { return }
+      do {
+        try await translationRuntime.load { [weak self] progress in
+          Task { @MainActor [weak self] in
+            guard let self, case .loadingModel = state else { return }
+            state = .loadingModel(progress)
+          }
+        }
+        guard !Task.isCancelled else { return }
+        state = .ready
+      } catch {
+        guard !Task.isCancelled else { return }
+        state = .modelLoadFailed(error.localizedDescription)
+      }
+    }
   }
 
   func beginTurn(_ speaker: Speaker) {
@@ -101,7 +129,17 @@ final class RealtimeTranslateViewModel: ObservableObject {
     activeItemID = nil
     pendingFinalTranscript = nil
     mostRecentTranslationRequest = nil
-    state = .ended
+    sessionTask?.cancel()
+    state = .endingSession
+    sessionTask = Task { [weak self, translationRuntime] in
+      await translationRuntime.close()
+      guard let self, state == .endingSession else { return }
+      items = []
+      activeItemID = nil
+      pendingFinalTranscript = nil
+      mostRecentTranslationRequest = nil
+      state = .setup
+    }
   }
 
   func beginNewSession() {
@@ -110,7 +148,14 @@ final class RealtimeTranslateViewModel: ObservableObject {
     pendingFinalTranscript = nil
     mostRecentTranslationRequest = nil
     items = []
-    state = .ready
+    state = .setup
+  }
+
+  var canEditSessionSettings: Bool {
+    switch state {
+    case .loadingModel, .endingSession: false
+    default: true
+    }
   }
 
   private func sourceLanguage(for speaker: Speaker) -> SpeechSourceLanguage {
@@ -150,22 +195,51 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
     state = .translating(speaker)
     speechRecognizer.stop()
-    mostRecentTranslationRequest = HyMT2Request(sourceText: transcript, targetLanguage: target)
-    updateActiveItem { item in
-      ConversationItem(
-        id: item.id, speaker: item.speaker, transcript: item.transcript,
-        targetLanguage: item.targetLanguage, translation: nil,
-        state: .translationFailed("Hy-MT2 runtime is not configured for this request.")
-      )
-    }
+    let request = HyMT2Request(sourceText: transcript, targetLanguage: target)
+    mostRecentTranslationRequest = request
+    let itemID = activeItemID
     activeItemID = nil
     pendingFinalTranscript = nil
-    state = .ready
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let translation = try await translationRuntime.translate(prompt: request.flatPrompt)
+        guard state == .translating(speaker), let itemID else { return }
+        updateItem(id: itemID) { item in
+          ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
+                           targetLanguage: item.targetLanguage, translation: translation, state: .translated)
+        }
+      } catch {
+        guard state == .translating(speaker), let itemID else { return }
+        updateItem(id: itemID) { item in
+          ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
+                           targetLanguage: item.targetLanguage, translation: nil,
+                           state: .translationFailed(error.localizedDescription))
+        }
+      }
+      guard state == .translating(speaker) else { return }
+      state = .ready
+    }
   }
 
   private func updateActiveItem(_ update: (ConversationItem) -> ConversationItem) {
     guard let id = activeItemID, let index = items.firstIndex(where: { $0.id == id }) else { return }
     items[index] = update(items[index])
+  }
+
+  private func updateItem(id: UUID, _ update: (ConversationItem) -> ConversationItem) {
+    guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+    items[index] = update(items[index])
+  }
+
+  private var isModelLoadFailure: Bool {
+    if case .modelLoadFailed = state { return true }
+    return false
+  }
+
+  deinit {
+    sessionTask?.cancel()
+    Task { [translationRuntime] in await translationRuntime.close() }
   }
 
   private static let previewItems = [
@@ -177,7 +251,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private static let failedPreviewItems = [
     ConversationItem(
       id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9], translation: nil,
-      state: .translationFailed("Hy-MT2 runtime is not configured for this request.")
+      state: .translationFailed("The Hy-MT2 translation model could not complete this request.")
     )
   ]
 }

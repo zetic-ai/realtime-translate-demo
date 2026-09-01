@@ -1,4 +1,8 @@
 name: RealtimeTranslate
+packages:
+  ZeticMLangeiOS:
+    url: https://github.com/zetic-ai/ZeticMLangeiOS.git
+    exactVersion: 1.10.0
 options:
   minimumXcodeGenVersion: 2.38.0
 settings:
@@ -11,6 +15,10 @@ targets:
     type: application
     platform: iOS
     sources: [Sources]
+    dependencies:
+      - package: ZeticMLangeiOS
+        product: ZeticMLange
+      - sdk: Accelerate.framework
     settings:
       base:
         INFOPLIST_FILE: Sources/Info.plist

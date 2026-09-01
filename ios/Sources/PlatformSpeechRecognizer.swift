@@ -48,14 +48,13 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
   }
 
   func availableSourceLanguages() -> [SpeechSourceLanguage] {
-    SFSpeechRecognizer.supportedLocales()
-      .map { locale in
-        SpeechSourceLanguage(
-          identifier: locale.identifier,
-          name: locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier
-        )
-      }
-      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    Self.sourceLanguages(
+      locales: Array(SFSpeechRecognizer.supportedLocales()),
+      supportsOnDeviceRecognition: { locale in
+        SFSpeechRecognizer(locale: locale)?.supportsOnDeviceRecognition == true
+      },
+      localizedName: { locale in locale.localizedString(forIdentifier: locale.identifier) }
+    )
   }
 
   func start(
@@ -75,6 +74,11 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     guard let recognizer = SFSpeechRecognizer(locale: source.locale) else {
       throw PlatformSpeechError.unsupportedLanguage(
         "\(source.name) speech recognition is unavailable on this device."
+      )
+    }
+    guard recognizer.supportsOnDeviceRecognition else {
+      throw PlatformSpeechError.unsupportedLanguage(
+        "\(source.name) does not support on-device speech recognition on this device."
       )
     }
     let request = SFSpeechAudioBufferRecognitionRequest()
@@ -154,9 +158,25 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     request.requiresOnDeviceRecognition = true
     request.shouldReportPartialResults = true
   }
+
+  static func sourceLanguages(
+    locales: [Locale],
+    supportsOnDeviceRecognition: (Locale) -> Bool,
+    localizedName: (Locale) -> String?
+  ) -> [SpeechSourceLanguage] {
+    locales
+      .filter(supportsOnDeviceRecognition)
+      .map { locale in
+        SpeechSourceLanguage(
+          identifier: locale.identifier,
+          name: localizedName(locale) ?? locale.identifier
+        )
+      }
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+  }
 }
 
-private extension SpeechSourceLanguage {
+extension SpeechSourceLanguage {
   var locale: Locale {
     identifier == Self.automatic.identifier ? .current : Locale(identifier: identifier)
   }

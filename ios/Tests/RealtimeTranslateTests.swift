@@ -9,17 +9,23 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(TargetLanguage.hyMT2Candidates.first { $0.code == "tl" }?.name, "Filipino")
   }
 
-  func testHyMT2RequestUsesOneUserPromptAndFullTargetLanguageName() {
+  func testHyMT2RequestUsesOneUserPromptAndOfficialFlatTemplate() {
     let request = HyMT2Request(sourceText: "Good morning", targetLanguage: .hyMT2Candidates[2])
 
     let expected = "Translate the following text into French. "
-      + "Note that you should only output the translated result without any additional explanation:\nGood morning"
+      + "Note that you should only output the translated result without any additional explanation:\n\nGood morning"
     XCTAssertEqual(request.userMessage, expected)
+    let expectedFlatPrompt = "<\u{FF5C}hy_begin\u{2581}of\u{2581}sentence\u{FF5C}>"
+      + "<\u{FF5C}hy_User\u{FF5C}>\(expected)"
+      + "<\u{FF5C}hy_Assistant\u{FF5C}>"
+    XCTAssertEqual(request.flatPrompt, expectedFlatPrompt)
+    XCTAssertEqual(Array(request.flatPrompt.utf8), Array(expectedFlatPrompt.utf8))
   }
 
-  func testCompletedTurnBuildsTheOfficialHyMT2RequestBeforeReportingRuntimeUnavailable() {
+  func testCompletedTurnBuildsTheOfficialHyMT2RequestAndShowsRuntimeResult() async {
     let recognizer = FakeSpeechRecognizer()
-    let viewModel = readyViewModel(recognizer)
+    let runtime = FakeTranslationRuntime(result: "Bonjour")
+    let viewModel = readyViewModel(recognizer, runtime: runtime)
     viewModel.targetLanguageB = .hyMT2Candidates[2]
 
     viewModel.beginTurn(.a)
@@ -30,9 +36,9 @@ final class RealtimeTranslateTests: XCTestCase {
       viewModel.mostRecentTranslationRequest,
       HyMT2Request(sourceText: "Good morning", targetLanguage: .hyMT2Candidates[2])
     )
-    guard case .translationFailed = viewModel.items.last?.state else {
-      return XCTFail("A missing runtime must not produce a translation.")
-    }
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.translation, "Bonjour")
+    XCTAssertEqual(runtime.prompts.count, 1)
   }
 
   func testSourceLanguagesStartWithAutomaticThenUsePlatformLocales() {
@@ -46,6 +52,35 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(viewModel.availableSourceLanguages, [.automatic, recognizer.sourceLanguages[0]])
   }
 
+  func testPlatformSourceLanguageCatalogFiltersToOnDeviceLocales() {
+    let english = Locale(identifier: "en-US")
+    let french = Locale(identifier: "fr-FR")
+
+    let languages = PlatformSpeechRecognizer.sourceLanguages(
+      locales: [french, english],
+      supportsOnDeviceRecognition: { $0.identifier == english.identifier },
+      localizedName: { $0.identifier }
+    )
+
+    XCTAssertEqual(languages, [SpeechSourceLanguage(identifier: "en-US", name: "en-US")])
+  }
+
+  func testExplicitSourceLanguageReachesSpeechRecognizer() {
+    let recognizer = FakeSpeechRecognizer()
+    let language = SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    recognizer.sourceLanguages = [language]
+    let viewModel = readyViewModel(recognizer)
+    viewModel.sourceLanguageA = language
+
+    viewModel.beginTurn(.a)
+
+    XCTAssertEqual(recognizer.startedSources, [language])
+  }
+
+  func testAutomaticSourceUsesCurrentLocale() {
+    XCTAssertEqual(SpeechSourceLanguage.automatic.locale.identifier, Locale.current.identifier)
+  }
+
   func testOnlyOneSpeakerCanListenAtATime() {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = readyViewModel(recognizer)
@@ -57,7 +92,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(recognizer.startedSources, [.automatic])
   }
 
-  func testATurnRoutesTranslationToBLanguage() {
+  func testATurnRoutesTranslationToBLanguage() async {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = readyViewModel(recognizer)
 
@@ -70,11 +105,12 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(recognizer.stopCount, 0)
     viewModel.endTurn(.a)
 
+    await waitUntil { viewModel.state == .ready }
     XCTAssertEqual(viewModel.items.last?.targetLanguage, viewModel.targetLanguageB)
     XCTAssertEqual(viewModel.state, .ready)
   }
 
-  func testBTurnRoutesTranslationToALanguage() {
+  func testBTurnRoutesTranslationToALanguage() async {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = readyViewModel(recognizer)
 
@@ -83,11 +119,12 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(viewModel.state, .listening(.b))
     viewModel.endTurn(.b)
 
+    await waitUntil { viewModel.state == .ready }
     XCTAssertEqual(viewModel.items.last?.speaker, .b)
     XCTAssertEqual(viewModel.items.last?.targetLanguage, viewModel.targetLanguageA)
   }
 
-  func testFinalBeforeReleaseDoesNotTranslateUntilRelease() {
+  func testFinalBeforeReleaseDoesNotTranslateUntilRelease() async {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = readyViewModel(recognizer)
 
@@ -99,16 +136,13 @@ final class RealtimeTranslateTests: XCTestCase {
     viewModel.endTurn(.a)
     XCTAssertEqual(recognizer.finishCount, 1)
 
-    guard case .translationFailed = viewModel.items.last?.state else {
-      return XCTFail("The source card must show a translation error after release")
-    }
-    XCTAssertNil(viewModel.items.last?.translation)
-    XCTAssertEqual(viewModel.state, .ready)
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.translation, "Translated")
     viewModel.beginTurn(.b)
     XCTAssertEqual(viewModel.state, .listening(.b))
   }
 
-  func testPartialAfterFinalKeepsPendingFinalForRelease() {
+  func testPartialAfterFinalKeepsPendingFinalForRelease() async {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = readyViewModel(recognizer)
 
@@ -119,6 +153,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(viewModel.state, .listening(.a))
 
     viewModel.endTurn(.a)
+    await waitUntil { viewModel.state == .ready }
     XCTAssertEqual(viewModel.items.last?.transcript, "final transcript")
     XCTAssertEqual(viewModel.state, .ready)
   }
@@ -140,10 +175,89 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertTrue(request.shouldReportPartialResults)
   }
 
-  private func readyViewModel(_ recognizer: FakeSpeechRecognizer) -> RealtimeTranslateViewModel {
-    RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
+  func testMissingBuildCredentialIsRejected() {
+    XCTAssertEqual(MelangeCredential.value(from: [:]), "")
+    XCTAssertEqual(MelangeCredential.value(from: ["MelangePersonalKey": "$(MELANGE_PERSONAL_KEY)"]), "")
+  }
+
+  func testResponseAccumulatorThrowsForModelErrorCode() {
+    var accumulator = TranslationResponseAccumulator()
+    XCTAssertThrowsError(try accumulator.append(token: "", generatedTokens: 0, code: 7)) { error in
+      XCTAssertEqual(error as? TranslationRuntimeError, .generationFailed(7))
+    }
+  }
+
+  func testResponseAccumulatorRejectsEmptyOutput() {
+    var accumulator = TranslationResponseAccumulator()
+    XCTAssertFalse(try accumulator.append(token: "", generatedTokens: 0, code: 0))
+    XCTAssertThrowsError(try accumulator.finalOutput()) { error in
+      XCTAssertEqual(error as? TranslationRuntimeError, .emptyOutput)
+    }
+  }
+
+  func testSessionLoadDisablesTurnsThenEnablesThemAfterRuntimeLoads() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "Translated")
+    let viewModel = RealtimeTranslateViewModel(
+      state: .setup, speechRecognizer: recognizer, translationRuntime: runtime
+    )
+
+    viewModel.startSession()
+    XCTAssertEqual(viewModel.state, .loadingModel(nil))
+    XCTAssertFalse(viewModel.canEditSessionSettings)
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertTrue(viewModel.canEditSessionSettings)
+    XCTAssertEqual(runtime.loadCount, 1)
+  }
+
+  func testSessionLoadFailureShowsRetryState() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(loadError: TestError.failed)
+    let viewModel = RealtimeTranslateViewModel(
+      state: .setup, speechRecognizer: recognizer, translationRuntime: runtime
+    )
+
+    viewModel.startSession()
+    await waitUntil { if case .modelLoadFailed = viewModel.state { return true }; return false }
+    XCTAssertTrue(viewModel.canEditSessionSettings)
+    XCTAssertEqual(runtime.loadCount, 1)
+  }
+
+  func testEndSessionClosesRuntimeAndReturnsToTargetLanguageSetup() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "Translated", closeDelayNanoseconds: 30_000_000)
+    let item = ConversationItem(
+      id: UUID(), speaker: .a, transcript: "Hello", targetLanguage: .hyMT2Candidates[1],
+      translation: "Hello", state: .translated
+    )
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [item], speechRecognizer: recognizer, translationRuntime: runtime
+    )
+
+    viewModel.endSession()
+    XCTAssertEqual(viewModel.state, .endingSession)
+    XCTAssertEqual(viewModel.items, [item])
+    await waitUntil { runtime.closeCount == 1 }
+    await waitUntil { viewModel.state == .setup }
+    XCTAssertEqual(viewModel.state, .setup)
+    XCTAssertTrue(viewModel.items.isEmpty)
+  }
+
+  private func readyViewModel(
+    _ recognizer: FakeSpeechRecognizer, runtime: FakeTranslationRuntime = FakeTranslationRuntime(result: "Translated")
+  ) -> RealtimeTranslateViewModel {
+    RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer, translationRuntime: runtime)
+  }
+
+  private func waitUntil(_ condition: @escaping () -> Bool) async {
+    for _ in 0 ..< 100 where !condition() {
+      try? await Task.sleep(nanoseconds: 1_000_000)
+    }
+    XCTAssertTrue(condition())
   }
 }
+
+private enum TestError: Error { case failed }
 
 @MainActor
 private final class FakeSpeechRecognizer: SpeechRecognizing {
@@ -166,4 +280,36 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   func stop() { stopCount += 1 }
   func sendPartial(_ transcript: String) { onPartial?(transcript) }
   func sendFinal(_ transcript: String) { onFinal?(transcript) }
+}
+
+private final class FakeTranslationRuntime: TranslationRuntime {
+  let result: String
+  let loadError: Error?
+  let closeDelayNanoseconds: UInt64
+  private(set) var loadCount = 0
+  private(set) var closeCount = 0
+  private(set) var prompts: [String] = []
+
+  init(result: String = "", loadError: Error? = nil, closeDelayNanoseconds: UInt64 = 0) {
+    self.result = result
+    self.loadError = loadError
+    self.closeDelayNanoseconds = closeDelayNanoseconds
+  }
+
+  func load(onProgress: @escaping @Sendable (Double) -> Void) async throws {
+    loadCount += 1
+    onProgress(0.5)
+    if let loadError { throw loadError }
+    onProgress(1)
+  }
+
+  func translate(prompt: String) async throws -> String {
+    prompts.append(prompt)
+    return result
+  }
+
+  func close() async {
+    if closeDelayNanoseconds > 0 { try? await Task.sleep(nanoseconds: closeDelayNanoseconds) }
+    closeCount += 1
+  }
 }

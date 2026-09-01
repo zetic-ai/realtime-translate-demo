@@ -14,25 +14,23 @@ class HyMt2TranslationRequestTest {
 
     @Test
     fun `uses the device recognizer without a fixed source language list`() {
-        assertEquals(listOf(SpeechLanguage.Automatic), SpeechLanguage.entries)
+        assertEquals("Automatic (device recognizer)", SpeechLanguage.Automatic.displayName)
     }
 
     @Test
-    fun `builds the official single user message without applying a chat template`() {
-        val request = HyMt2TranslationRequestBuilder.build(
+    fun `maps installed language tags without a fixed whitelist`() {
+        val languages = SpeechLanguageCatalogMapping.installed(listOf("fr-FR", "ko-KR", "fr-FR"))
+        assertEquals(listOf("French (France)", "Korean (South Korea)"), languages.map { it.displayName })
+    }
+
+    @Test
+    fun `renders the official one turn chat template`() {
+        val prompt = HyMt2TranslationRequestBuilder.build(
             sourceText = "Good morning.",
             targetLanguage = HyMt2Languages.all.first { it.code == "fr" },
         )
 
-        assertEquals(
-            listOf(
-                HyMt2ChatMessage(
-                    role = "user",
-                    content = "Translate the following text into French. Note that you should only output the translated result without any additional explanation:\nGood morning.",
-                ),
-            ),
-            request.messages,
-        )
+        assertEquals("<\uFF5Chy_begin\u2581of\u2581sentence\uFF5C><\uFF5Chy_User\uFF5C>Translate the following text into French. Note that you should only output the translated result without any additional explanation:\n\nGood morning.<\uFF5Chy_Assistant\uFF5C>", prompt)
     }
 
     @Test

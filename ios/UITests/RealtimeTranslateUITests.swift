@@ -22,9 +22,26 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Start B Turn"].isEnabled)
   }
 
-  func testEndedStateOffersNewSession() {
+  func testEndedStateReturnsToTargetLanguageSetup() {
     let app = launch(state: "ended")
-    XCTAssertTrue(app.buttons["Start New Session"].exists)
+    XCTAssertTrue(app.buttons["Start Session"].exists)
+    XCTAssertTrue(app.buttons["Start Session"].isEnabled)
+    XCTAssertTrue(app.buttons["source-language-A"].label.contains("Automatic"))
+    XCTAssertTrue(app.buttons["source-language-B"].label.contains("Automatic"))
+  }
+
+  func testModelLoadingDisablesLanguagePickers() {
+    let app = launch(state: "loadingModel")
+    XCTAssertFalse(app.buttons["source-language-A"].isEnabled)
+    XCTAssertFalse(app.buttons["target-language-A"].isEnabled)
+    XCTAssertFalse(app.buttons["source-language-B"].isEnabled)
+    XCTAssertFalse(app.buttons["target-language-B"].isEnabled)
+  }
+
+  func testModelLoadFailureEnablesLanguagePickers() {
+    let app = launch(state: "modelLoadFailed")
+    XCTAssertTrue(app.buttons["source-language-A"].isEnabled)
+    XCTAssertTrue(app.buttons["target-language-B"].isEnabled)
   }
 
   func testReadyControlsRemainHittableAboveTheHomeIndicator() {

@@ -51,15 +51,26 @@ The A and B reading-language selectors use these 38 entries from the official Su
 
 ## Request contract
 
-Create one plain-text prompt and send it as the only `user` message. Do not add a system message. Replace `{target_lang}` with the target language's complete English name and `{source_text}` with the finalized STT transcript.
+The official request is one plain-text `user` message with no system message. Replace `{target_lang}` with the target language's complete English name and `{source_text}` with the finalized STT transcript. The blank line before `{source_text}` is required.
 
 ```text
 Translate the following text into {target_lang}. Note that you should only output the translated result without any additional explanation:
+
 {source_text}
 ```
 
-The runtime, not the application prompt builder, applies the model's Jinja chat template with `add_generation_prompt = true`. For this one-user-message request, the template emits the begin-of-sentence token, a user token, the prompt text, and then the assistant generation token. The template can process a system message, but the model card states that the 1.8B model has no default system prompt; this app does not send one.
+The official GGUF chat template emits a begin-of-sentence token, a user token, the user message, and an assistant generation token. The template can process a system message, but the model card states that the 1.8B model has no default system prompt; this app does not send one.
 
-## Current scope
+Turn Translate uses Melange SDK `1.10.0`, whose inference entry point accepts a `String`, not chat messages. The app therefore renders the exact flat prompt below and passes that string to `SJ_zetic/Hy-MT2-1.8B`. Android and iOS must produce byte-equivalent output.
 
-The app exposes the official target-language list and constructs the documented request. Downloading a GGUF artifact, selecting a GGUF quantization, applying the chat template in a mobile runtime, and executing Hy-MT2 inference are intentionally outside the current app scope. Until that runtime integration exists, an unavailable translation runtime must show an error and must not fabricate a translation.
+```text
+<｜hy_begin▁of▁sentence｜><｜hy_User｜>Translate the following text into {target_lang}. Note that you should only output the translated result without any additional explanation:
+
+{source_text}<｜hy_Assistant｜>
+```
+
+## App integration
+
+At session start, the app downloads and loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. A loading state reports progress; a loading or inference failure reports an error with retry and never fabricates a translation. The app serializes translation requests. At session end and view-model teardown, it releases the model with the SDK cleanup and close lifecycle before returning to setup.
+
+`MELANGE_PERSONAL_KEY` is supplied from the build environment and must not appear in source control or logs. It is embedded into a development app binary for SDK initialization; this is unsuitable for production distribution, which requires rotatable credential provisioning. Model selection is fixed to `SJ_zetic/Hy-MT2-1.8B`; the app does not import models or select a GGUF quantization.

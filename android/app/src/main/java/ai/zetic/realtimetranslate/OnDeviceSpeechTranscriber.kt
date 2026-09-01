@@ -8,6 +8,9 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.RecognitionSupport
+import android.speech.RecognitionSupportCallback
+import java.util.Locale
 
 interface SpeechTranscriber {
     fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult
@@ -52,7 +55,7 @@ class AndroidOnDeviceSpeechTranscriber(
         destroyed = false
         stopping = false
         activeListener = listener
-        val intent = recognitionIntent()
+        val intent = OnDeviceRecognitionIntentFactory.create(language, Build.VERSION.SDK_INT)
         val onDeviceRecognizer = platform.createOnDeviceSpeechRecognizer(context)
         recognizer = onDeviceRecognizer.apply { setRecognitionListener(listener(intent)) }
         beginListening(intent)
@@ -108,12 +111,61 @@ class AndroidOnDeviceSpeechTranscriber(
         override fun onEvent(eventType: Int, params: android.os.Bundle?) = Unit
     }
 
-    private fun recognitionIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+}
+
+object OnDeviceRecognitionIntentFactory {
+    fun create(language: SpeechLanguage, sdkInt: Int) = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (language is SpeechLanguage.Installed) putExtra(RecognizerIntent.EXTRA_LANGUAGE, language.languageTag)
+        if (language is SpeechLanguage.Automatic && sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
         }
+    }
+}
+
+interface SpeechLanguageCatalog {
+    fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit)
+}
+
+data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: String? = null)
+
+object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
+    override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic)))
+            return
+        }
+        if (!AndroidOnDeviceSpeechRecognizerPlatform.isOnDeviceRecognitionAvailable(context)) {
+            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), "This device has no on-device speech recognizer."))
+            return
+        }
+        val recognizer = AndroidOnDeviceSpeechRecognizerPlatform.createOnDeviceSpeechRecognizer(context)
+        recognizer.checkRecognitionSupport(
+            OnDeviceRecognitionIntentFactory.create(SpeechLanguage.Automatic, Build.VERSION.SDK_INT),
+            context.mainExecutor,
+            object : RecognitionSupportCallback {
+                override fun onSupportResult(support: RecognitionSupport) {
+                    val languages = SpeechLanguageCatalogMapping.installed(support.installedOnDeviceLanguages)
+                    recognizer.destroy()
+                    onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic) + languages))
+                }
+                override fun onError(error: Int) {
+                    recognizer.destroy()
+                    onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), "Installed on-device language list is unavailable (error $error)."))
+                }
+            },
+        )
+    }
+
+}
+
+object SpeechLanguageCatalogMapping {
+    fun installed(tags: List<String>): List<SpeechLanguage.Installed> = tags.map(::installedLanguage).distinctBy { it.languageTag }.sortedBy { it.displayName }
+
+    private fun installedLanguage(tag: String): SpeechLanguage.Installed {
+        val locale = Locale.forLanguageTag(tag)
+        return SpeechLanguage.Installed(tag, locale.getDisplayName(Locale.ENGLISH).ifBlank { tag })
     }
 }
 

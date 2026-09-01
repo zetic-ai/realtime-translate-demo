@@ -10,10 +10,13 @@
 		72612CC547B37C8683B4CE3B /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C61319FFF47136929BAF199 /* Models.swift */; };
 		8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */; };
 		8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */; };
+		8EC6C3010220ACCEC54729E0 /* MelangeTranslationRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */; };
 		94DC78FD9FAE004496146F59 /* RealtimeTranslateUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE8BBE5E61A035A50C6BED0 /* RealtimeTranslateUITests.swift */; };
 		98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */; };
 		994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */; };
 		9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */; };
+		A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = 98E43219EA9601F248FA4521 /* ZeticMLange */; };
+		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,8 +47,22 @@
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C173CF675A584896801C0C7C /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		CA4397337AD04A9EF1EBB4DE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelangeTranslationRuntime.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E1BC590D3E89F5722969905E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */,
+				C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		01CA0422301C66A862B40DC8 /* Tests */ = {
@@ -74,10 +91,19 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		4FBE6CF6859C5C8B0CFB5121 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C173CF675A584896801C0C7C /* Accelerate.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		7D55C0280B8AF6E173A1A60E /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
+				F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
 				28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */,
 				0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */,
@@ -93,6 +119,7 @@
 				7D55C0280B8AF6E173A1A60E /* Sources */,
 				01CA0422301C66A862B40DC8 /* Tests */,
 				048F21BA8F751B9B3622D546 /* UITests */,
+				4FBE6CF6859C5C8B0CFB5121 /* Frameworks */,
 				143A5DA858DAACEABEFF460C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -123,6 +150,7 @@
 			buildConfigurationList = E5509F5A2B921B320FA02E72 /* Build configuration list for PBXNativeTarget "RealtimeTranslate" */;
 			buildPhases = (
 				E97A7EDC030338B016F4D528 /* Sources */,
+				E1BC590D3E89F5722969905E /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -130,6 +158,7 @@
 			);
 			name = RealtimeTranslate;
 			packageProductDependencies = (
+				98E43219EA9601F248FA4521 /* ZeticMLange */,
 			);
 			productName = RealtimeTranslate;
 			productReference = 7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */;
@@ -176,6 +205,9 @@
 			);
 			mainGroup = FCC65DE793108928FA89CC2C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 143A5DA858DAACEABEFF460C /* Products */;
 			projectDirPath = "";
@@ -209,6 +241,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EC6C3010220ACCEC54729E0 /* MelangeTranslationRuntime.swift in Sources */,
 				72612CC547B37C8683B4CE3B /* Models.swift in Sources */,
 				8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */,
 				8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */,
@@ -492,6 +525,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/zetic-ai/ZeticMLangeiOS.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		98E43219EA9601F248FA4521 /* ZeticMLange */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */;
+			productName = ZeticMLange;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7EA49F6D7679F4FF8FE4996F /* Project object */;
 }

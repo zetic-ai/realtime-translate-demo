@@ -1,6 +1,6 @@
 package ai.zetic.realtimetranslate
 
-enum class SessionPhase { PermissionRequired, Ready, ListeningA, ListeningB, FinalizingA, FinalizingB, TranslatingA, TranslatingB, Error }
+enum class SessionPhase { PermissionRequired, LoadingModel, ModelLoadFailed, EndingSession, Ready, ListeningA, ListeningB, FinalizingA, FinalizingB, TranslatingA, TranslatingB, Error }
 
 enum class Speaker(val label: String) {
     A("A"), B("B");
@@ -8,8 +8,11 @@ enum class Speaker(val label: String) {
     fun other() = if (this == A) B else A
 }
 
-enum class SpeechLanguage(val displayName: String) {
-    Automatic("Automatic (device recognizer)"),
+sealed interface SpeechLanguage {
+    val displayName: String
+
+    data object Automatic : SpeechLanguage { override val displayName = "Automatic (device recognizer)" }
+    data class Installed(val languageTag: String, override val displayName: String) : SpeechLanguage
 }
 
 data class TranslationLanguage(val code: String, val displayName: String)
@@ -51,6 +54,10 @@ data class SessionUiState(
     val settings: Map<Speaker, SpeakerSettings> = Speaker.entries.associateWith { SpeakerSettings() },
     val conversations: List<ConversationItem> = emptyList(),
     val conversationStarted: Boolean = false,
+    val modelLoadProgress: Float = 0f,
+    val speechLanguages: List<SpeechLanguage> = listOf(SpeechLanguage.Automatic),
+    val speechLanguageCatalogLoading: Boolean = false,
+    val speechLanguageCatalogMessage: String? = null,
     val errorMessage: String? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)

@@ -15,9 +15,14 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        val personalKey = providers.environmentVariable("MELANGE_PERSONAL_KEY").orNull.orEmpty()
+        buildConfigField("String", "MELANGE_PERSONAL_KEY", "\"${personalKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -25,9 +30,14 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+
+    packaging {
+        jniLibs.useLegacyPackaging = true
+    }
 }
 
 dependencies {
+    implementation("com.zeticai.mlange:mlange:1.10.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
