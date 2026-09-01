@@ -6,6 +6,44 @@ import Speech
 final class RealtimeTranslateTests: XCTestCase {
   func testHyMT2CandidateCatalogHas38Languages() {
     XCTAssertEqual(TargetLanguage.hyMT2Candidates.count, 38)
+    XCTAssertEqual(TargetLanguage.hyMT2Candidates.first { $0.code == "tl" }?.name, "Filipino")
+  }
+
+  func testHyMT2RequestUsesOneUserPromptAndFullTargetLanguageName() {
+    let request = HyMT2Request(sourceText: "Good morning", targetLanguage: .hyMT2Candidates[2])
+
+    let expected = "Translate the following text into French. "
+      + "Note that you should only output the translated result without any additional explanation:\nGood morning"
+    XCTAssertEqual(request.userMessage, expected)
+  }
+
+  func testCompletedTurnBuildsTheOfficialHyMT2RequestBeforeReportingRuntimeUnavailable() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+    viewModel.targetLanguageB = .hyMT2Candidates[2]
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("Good morning")
+    viewModel.endTurn(.a)
+
+    XCTAssertEqual(
+      viewModel.mostRecentTranslationRequest,
+      HyMT2Request(sourceText: "Good morning", targetLanguage: .hyMT2Candidates[2])
+    )
+    guard case .translationFailed = viewModel.items.last?.state else {
+      return XCTFail("A missing runtime must not produce a translation.")
+    }
+  }
+
+  func testSourceLanguagesStartWithAutomaticThenUsePlatformLocales() {
+    let recognizer = FakeSpeechRecognizer()
+    recognizer.sourceLanguages = [SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")]
+
+    let viewModel = RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
+
+    XCTAssertEqual(viewModel.sourceLanguageA, .automatic)
+    XCTAssertEqual(viewModel.sourceLanguageB, .automatic)
+    XCTAssertEqual(viewModel.availableSourceLanguages, [.automatic, recognizer.sourceLanguages[0]])
   }
 
   func testOnlyOneSpeakerCanListenAtATime() {
@@ -16,7 +54,7 @@ final class RealtimeTranslateTests: XCTestCase {
     viewModel.beginTurn(.b)
 
     XCTAssertEqual(viewModel.state, .listening(.a))
-    XCTAssertEqual(recognizer.startedSources, [.korean])
+    XCTAssertEqual(recognizer.startedSources, [.automatic])
   }
 
   func testATurnRoutesTranslationToBLanguage() {
@@ -103,8 +141,7 @@ final class RealtimeTranslateTests: XCTestCase {
   }
 
   private func readyViewModel(_ recognizer: FakeSpeechRecognizer) -> RealtimeTranslateViewModel {
-    RealtimeTranslateViewModel(state: .ready, sourceLanguageA: .korean, sourceLanguageB: .english,
-                               speechRecognizer: recognizer)
+    RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
   }
 }
 
@@ -112,13 +149,14 @@ final class RealtimeTranslateTests: XCTestCase {
 private final class FakeSpeechRecognizer: SpeechRecognizing {
   private var onPartial: ((String) -> Void)?
   private var onFinal: ((String) -> Void)?
-  private(set) var startedSources: [SpokenLanguage] = []
+  var sourceLanguages: [SpeechSourceLanguage] = []
+  private(set) var startedSources: [SpeechSourceLanguage] = []
   private(set) var finishCount = 0
   private(set) var stopCount = 0
 
   func requestPermissions() async -> SpeechPermission { .granted }
-  func capability(for language: SpokenLanguage) -> SpeechLanguageCapability { .available }
-  func start(source: SpokenLanguage, onPartial: @escaping (String) -> Void,
+  func availableSourceLanguages() -> [SpeechSourceLanguage] { sourceLanguages }
+  func start(source: SpeechSourceLanguage, onPartial: @escaping (String) -> Void,
              onFinal: @escaping (String) -> Void) throws {
     startedSources.append(source)
     self.onPartial = onPartial

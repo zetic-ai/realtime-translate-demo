@@ -8,8 +8,6 @@ import kotlinx.coroutines.flow.asStateFlow
 
 sealed interface SessionAction {
     data class PermissionChanged(val granted: Boolean, val permanentlyDenied: Boolean = false) : SessionAction
-    data class ProbeCapabilities(val context: Context) : SessionAction
-    data class InputLanguageChanged(val speaker: Speaker, val language: SpeechLanguage) : SessionAction
     data class ReadingLanguageChanged(val speaker: Speaker, val language: TranslationLanguage) : SessionAction
     data object StartConversation : SessionAction
     data object EndSession : SessionAction
@@ -21,7 +19,6 @@ sealed interface SessionAction {
 
 class SessionViewModel(
     private val transcriberFactory: (Context) -> SpeechTranscriber = { AndroidOnDeviceSpeechTranscriber(it) },
-    private val modelGate: ModelCompatibilityGate = ModelCompatibilityGate(),
     initialState: SessionUiState = SessionUiState(SessionPhase.PermissionRequired),
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(initialState)
@@ -35,8 +32,6 @@ class SessionViewModel(
                 permissionPermanentlyDenied = !action.granted && action.permanentlyDenied,
                 errorMessage = null,
             )
-            is SessionAction.ProbeCapabilities -> probeCapabilities(action.context)
-            is SessionAction.InputLanguageChanged -> updateSettings(action.speaker) { it.copy(inputLanguage = action.language) }
             is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) { it.copy(readingLanguage = action.language) }
             SessionAction.StartConversation -> mutableState.value = mutableState.value.copy(conversationStarted = true, errorMessage = null)
             SessionAction.EndSession -> endSession()
@@ -56,17 +51,12 @@ class SessionViewModel(
         val current = mutableState.value
         if (!current.conversationStarted || current.phase != SessionPhase.Ready) return
         val settings = current.settingsFor(speaker)
-        if (settings.inputLanguage !in current.availableInputLanguages && settings.inputLanguage !in current.downloadableInputLanguages) {
-            mutableState.value = current.copy(phase = SessionPhase.Error, errorMessage = current.sourceCapabilityMessage ?: "The selected language for speaker ${speaker.label} needs on-device STT support verification.")
-            return
-        }
         transcriber?.destroy()
         val newTranscriber = transcriberFactory(context.applicationContext)
         transcriber = newTranscriber
         mutableState.value = current.copy(phase = finalizingPhase(speaker), errorMessage = null)
         when (val result = newTranscriber.start(settings.inputLanguage, transcriptListener(speaker, newTranscriber))) {
             SpeechStartResult.Started -> listening(speaker)
-            is SpeechStartResult.Downloading -> mutableState.value = mutableState.value.copy(modelGateMessage = result.message)
             is SpeechStartResult.Failed -> fail(result.message)
         }
     }
@@ -77,32 +67,12 @@ class SessionViewModel(
         else -> Unit
     }
 
-    private fun probeCapabilities(context: Context) {
-        val probe = transcriberFactory(context.applicationContext)
-        mutableState.value = mutableState.value.copy(sourceCapabilityMessage = "Checking on-device STT support for each spoken language.")
-        probe.probe(SpeechLanguage.entries.toList()) { result ->
-            probe.destroy()
-            mutableState.value = mutableState.value.copy(
-                availableInputLanguages = result.available,
-                downloadableInputLanguages = result.downloadable,
-                sourceCapabilityMessage = result.message ?: if (result.available.isEmpty()) "No on-device spoken languages are available on this device." else null,
-            )
-        }
-    }
-
     private fun listening(speaker: Speaker) {
-        if (transcriber != null) mutableState.value = mutableState.value.copy(phase = listeningPhase(speaker), modelGateMessage = null)
+        if (transcriber != null) mutableState.value = mutableState.value.copy(phase = listeningPhase(speaker))
     }
 
     private fun transcriptListener(speaker: Speaker, owner: SpeechTranscriber) = object : SpeechTranscriptListener {
         override fun onReady() = listening(speaker)
-        override fun onModelDownload(message: String, restartRequired: Boolean) {
-            if (restartRequired) {
-                owner.destroy()
-                if (transcriber === owner) transcriber = null
-                mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, modelGateMessage = message)
-            } else mutableState.value = mutableState.value.copy(phase = finalizingPhase(speaker), modelGateMessage = message)
-        }
         override fun onPartial(transcript: String) = updateTranscript(speaker, transcript, false)
         override fun onFinal(transcript: String) = updateTranscript(speaker, transcript, true)
         override fun onStopped() {
@@ -110,7 +80,6 @@ class SessionViewModel(
             if (transcriber === owner) transcriber = null
             finalize(speaker)
         }
-        override fun onDeviceUnsupported(message: String) = fail(message, owner)
         override fun onError(message: String) = fail(message, owner)
     }
 
@@ -141,10 +110,8 @@ class SessionViewModel(
             return
         }
         mutableState.value = current.copy(phase = translatingPhase(speaker))
-        when (val gate = modelGate.check(item.sourceLanguage, item.targetLanguage)) {
-            GateResult.Ready -> failTranslation(item.id, "The Hy-MT2 translation runtime is not connected yet.")
-            is GateResult.Blocked -> failTranslation(item.id, gate.reason)
-        }
+        HyMt2TranslationRequestBuilder.build(item.transcript, item.targetLanguage)
+        failTranslation(item.id, "The Hy-MT2 translation runtime is not connected yet.")
     }
 
     private fun failTranslation(id: String, message: String) {
@@ -161,7 +128,7 @@ class SessionViewModel(
     private fun endSession() {
         transcriber?.destroy()
         transcriber = null
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, errorMessage = null, modelGateMessage = null)
+        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, errorMessage = null)
     }
 
     override fun onCleared() { transcriber?.destroy(); transcriber = null }

@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.sp
 
 sealed interface UiAction {
     data object RequestPermission : UiAction
-    data class SelectInput(val speaker: Speaker, val language: SpeechLanguage) : UiAction
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
     data object StartConversation : UiAction
     data object EndSession : UiAction
@@ -54,7 +53,6 @@ sealed interface UiAction {
 
 fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RequestPermission -> SessionAction.Retry
-    is UiAction.SelectInput -> SessionAction.InputLanguageChanged(speaker, language)
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
     UiAction.StartConversation -> SessionAction.StartConversation
     UiAction.EndSession -> SessionAction.EndSession
@@ -96,7 +94,6 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     Card(colors = CardDefaults.cardColors(containerColor = SurfaceMuted), modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Session status: $label" }) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(label, color = TextSecondary, fontSize = 12.sp)
-            listOfNotNull(state.sourceCapabilityMessage, state.modelGateMessage).forEach { Text(it, color = TextSecondary, fontSize = 12.sp) }
         }
     }
 }
@@ -110,7 +107,7 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SpeakerSetup(Speaker.A, state, onAction)
         SpeakerSetup(Speaker.B, state, onAction)
-        Button(onClick = { onAction(UiAction.StartConversation) }, enabled = state.settings.values.all { it.inputLanguage in state.availableInputLanguages || it.inputLanguage in state.downloadableInputLanguages }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Start conversation" }) { Text("Start conversation") }
+        Button(onClick = { onAction(UiAction.StartConversation) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Start conversation" }) { Text("Start conversation") }
     }
 }
 
@@ -119,7 +116,11 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     Card(colors = CardDefaults.cardColors(containerColor = SurfaceMuted), shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Speaker ${speaker.label}", fontWeight = FontWeight.Bold)
-            LanguagePicker("Speaker ${speaker.label} input language", settings.inputLanguage.displayName, SpeechLanguage.entries.map { it.displayName to UiAction.SelectInput(speaker, it) }, onAction, (state.availableInputLanguages + state.downloadableInputLanguages).map { UiAction.SelectInput(speaker, it) }.toSet())
+            Text("Recognition language", color = TextSecondary, fontSize = 12.sp)
+            Text(
+                settings.inputLanguage.displayName,
+                modifier = Modifier.semantics { contentDescription = "Speaker ${speaker.label} recognition language: ${settings.inputLanguage.displayName}" },
+            )
             LanguagePicker("Speaker ${speaker.label} translation language", settings.readingLanguage.displayName, HyMt2Languages.all.map { it.displayName to UiAction.SelectReading(speaker, it) }, onAction)
         }
     }

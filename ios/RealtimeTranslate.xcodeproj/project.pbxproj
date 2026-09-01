@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3ED0FD2BAD517FB6C19A6A69 /* ModelCompatibilityGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */; };
 		72612CC547B37C8683B4CE3B /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C61319FFF47136929BAF199 /* Models.swift */; };
 		8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */; };
 		8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */; };
@@ -42,7 +41,6 @@
 		4EE8BBE5E61A035A50C6BED0 /* RealtimeTranslateUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateUITests.swift; sourceTree = "<group>"; };
 		6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateTests.swift; sourceTree = "<group>"; };
 		6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateRootView.swift; sourceTree = "<group>"; };
-		70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCompatibilityGate.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,7 +78,6 @@
 			isa = PBXGroup;
 			children = (
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
-				70B3DC612298EE42325D3E27 /* ModelCompatibilityGate.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
 				28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */,
 				0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */,
@@ -212,7 +209,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3ED0FD2BAD517FB6C19A6A69 /* ModelCompatibilityGate.swift in Sources */,
 				72612CC547B37C8683B4CE3B /* Models.swift in Sources */,
 				8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */,
 				8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */,

@@ -10,11 +10,11 @@ Both apps follow the same conversation flow and design tokens while using native
 
 - [MVP plan](docs/mvp-plan.md)
 - [Shared UX and design specification](docs/shared-ux-spec.md)
-- [Model language compatibility gate](docs/model-compatibility-gate.md)
+- [Hy-MT2 translation reference](docs/hy-mt2-integration-reference.md)
 
 ## Implementation directories
 
 - `android/`: Kotlin and Jetpack Compose app
 - `ios/`: Swift and SwiftUI app
 
-STT uses Android and iOS on-device speech recognition. An A or B utterance starts only when the selected language and device support on-device recognition and required permissions are granted; the app never automatically falls back to network STT. Model and device support, along with real-time performance, are not treated as confirmed features until the checks in `docs/model-compatibility-gate.md` pass.
+STT uses Android and iOS on-device speech recognition. A speaker can choose `Automatic` or an OS-provided recognition language; the app does not impose a source-language list and never automatically falls back to network STT. The reading-language selector uses the 38 official Hy-MT2 entries documented in `docs/hy-mt2-integration-reference.md`. GGUF runtime integration is not part of the current MVP.

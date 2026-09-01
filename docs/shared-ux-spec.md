@@ -6,7 +6,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 ## Screen structure
 
-1. **Speaker setup**: Speaking language and reading language for A and B, microphone and speech-recognition permission and on-device capability state, and a `Start conversation` button.
+1. **Speaker setup**: `Automatic` or an OS-provided recognition language and a reading language for A and B, microphone and speech-recognition permission state, and a `Start conversation` button.
 2. **Conversation**: A state header, chronologically ordered utterance cards, and A/B push-to-talk buttons at the bottom.
 3. **Error guidance**: The affected speaker, language, and cause, with `Try again` or `Open settings` actions.
 
@@ -15,7 +15,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 ```text
 Status header: "Conversation ready" | "A is speaking" | "Translating"
 
-[ A - Korean ]                 [ B - English ]
+[ A - Automatic ]              [ B - Device language ]
   Hello                         Hello
   To B: Hello                   To A: Hello
 
@@ -52,15 +52,15 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 ## On-device STT prerequisites
 
-- Android API 31-32 can start a selected language provisionally when an on-device service exists. If on-device recognition for that language fails at start, the app shows an `onDeviceUnsupported` error and recovery guidance. Android API 33 and later distinguish installed-on-device and downloadable states.
-- iOS requires `supportsOnDeviceRecognition` and `isAvailable` for the selected locale, granted Speech and microphone permissions, and `requiresOnDeviceRecognition = true` on the STT request.
-- If any condition is not met, the relevant speaker control is unavailable or the app enters `error` with guidance. Network STT fallback is never used.
+- The source-language selector is not limited by the app. It provides `Automatic` and the recognition languages offered by the platform.
+- Android and iOS use on-device recognition only. Device, OS, permissions, and downloaded speech assets determine whether a requested recognition language can start.
+- The app does not preflight or gate a source language. If the platform cannot start recognition, it enters `error` with guidance. Network STT fallback is never used.
 
-## Translation execution gate
+## Translation execution
 
-- A and B reading-language selectors show all 38 options from the [model language compatibility gate](model-compatibility-gate.md).
+- A and B reading-language selectors show all 38 options from the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
 - Translation runs only for finalized source text: A translates to B's reading language and B translates to A's reading language.
-- If Hy-MT2 initialization, model execution, or physical-device compatibility verification fails, the app preserves the source card and shows an error and recovery action instead of an invented translation or an empty translation bubble.
+- The translation request uses the documented one-user-message Hy-MT2 prompt. If the runtime is unavailable or fails, the app preserves the source card and shows an error and recovery action instead of an invented translation or an empty translation bubble.
 - Hy-MT2 requests are serial. A queued card displays the recipient and `Translation pending`.
 
 ## Design tokens

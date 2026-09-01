@@ -4,31 +4,28 @@ import UIKit
 @MainActor
 final class RealtimeTranslateViewModel: ObservableObject {
   @Published private(set) var state: SessionState
-  @Published var sourceLanguageA: SpokenLanguage
+  @Published var sourceLanguageA: SpeechSourceLanguage
   @Published var targetLanguageA: TargetLanguage
-  @Published var sourceLanguageB: SpokenLanguage
+  @Published var sourceLanguageB: SpeechSourceLanguage
   @Published var targetLanguageB: TargetLanguage
   @Published private(set) var items: [ConversationItem]
-  @Published private(set) var availableSourceLanguages: [SpokenLanguage]
+  @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
 
   private let speechRecognizer: any SpeechRecognizing
-  private let modelGate = ModelCompatibilityGate()
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
+  private(set) var mostRecentTranslationRequest: HyMT2Request?
 
-  init(state: SessionState = .permissionRequired, sourceLanguageA: SpokenLanguage = .korean,
-       targetLanguageA: TargetLanguage = .hyMT2Candidates[0], sourceLanguageB: SpokenLanguage = .english,
+  init(state: SessionState = .permissionRequired, sourceLanguageA: SpeechSourceLanguage = .automatic,
+       targetLanguageA: TargetLanguage = .hyMT2Candidates[0], sourceLanguageB: SpeechSourceLanguage = .automatic,
        targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
        speechRecognizer: (any SpeechRecognizing)? = nil) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
-    let supported = SpokenLanguage.allCases.filter {
-      if case .available = recognizer.capability(for: $0) { return true }
-      return false
-    }
+    let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     self.state = state
-    self.sourceLanguageA = supported.contains(sourceLanguageA) ? sourceLanguageA : supported.first ?? sourceLanguageA
+    self.sourceLanguageA = supported.contains(sourceLanguageA) ? sourceLanguageA : .automatic
     self.targetLanguageA = targetLanguageA
-    self.sourceLanguageB = supported.contains(sourceLanguageB) ? sourceLanguageB : supported.first ?? sourceLanguageB
+    self.sourceLanguageB = supported.contains(sourceLanguageB) ? sourceLanguageB : .automatic
     self.targetLanguageB = targetLanguageB
     self.items = items
     self.speechRecognizer = recognizer
@@ -64,12 +61,6 @@ final class RealtimeTranslateViewModel: ObservableObject {
   func beginTurn(_ speaker: Speaker) {
     guard state == .ready else { return }
     let language = sourceLanguage(for: speaker)
-    guard availableSourceLanguages.contains(language) else {
-      state = .error(
-        "The on-device \(language.rawValue) speech recognition model is unavailable for \(speaker.rawValue)."
-      )
-      return
-    }
     let item = ConversationItem(
       id: UUID(), speaker: speaker, transcript: "", targetLanguage: targetLanguage(for: speaker.counterpart),
       translation: nil, state: .partial
@@ -109,6 +100,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     speechRecognizer.stop()
     activeItemID = nil
     pendingFinalTranscript = nil
+    mostRecentTranslationRequest = nil
     state = .ended
   }
 
@@ -116,11 +108,12 @@ final class RealtimeTranslateViewModel: ObservableObject {
     speechRecognizer.stop()
     activeItemID = nil
     pendingFinalTranscript = nil
+    mostRecentTranslationRequest = nil
     items = []
     state = .ready
   }
 
-  private func sourceLanguage(for speaker: Speaker) -> SpokenLanguage {
+  private func sourceLanguage(for speaker: Speaker) -> SpeechSourceLanguage {
     speaker == .a ? sourceLanguageA : sourceLanguageB
   }
 
@@ -129,10 +122,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   }
 
   private func refreshAvailableLanguages() {
-    availableSourceLanguages = SpokenLanguage.allCases.filter {
-      if case .available = speechRecognizer.capability(for: $0) { return true }
-      return false
-    }
+    availableSourceLanguages = [SpeechSourceLanguage.automatic] + speechRecognizer.availableSourceLanguages()
   }
 
   private func receivePartial(_ transcript: String, speaker: Speaker) {
@@ -160,17 +150,17 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
     state = .translating(speaker)
     speechRecognizer.stop()
-    if let reason = modelGate.translationError(for: sourceLanguage(for: speaker), target: target) {
-      updateActiveItem { item in
+    mostRecentTranslationRequest = HyMT2Request(sourceText: transcript, targetLanguage: target)
+    updateActiveItem { item in
       ConversationItem(
         id: item.id, speaker: item.speaker, transcript: item.transcript,
-        targetLanguage: item.targetLanguage, translation: nil, state: .translationFailed(reason)
+        targetLanguage: item.targetLanguage, translation: nil,
+        state: .translationFailed("Hy-MT2 runtime is not configured for this request.")
       )
-      }
-      activeItemID = nil
-      pendingFinalTranscript = nil
-      state = .ready
     }
+    activeItemID = nil
+    pendingFinalTranscript = nil
+    state = .ready
   }
 
   private func updateActiveItem(_ update: (ConversationItem) -> ConversationItem) {
@@ -187,7 +177,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private static let failedPreviewItems = [
     ConversationItem(
       id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9], translation: nil,
-      state: .translationFailed("SJ_zetic/Hy-MT2-1.8B runtime and artifact compatibility has not been verified.")
+      state: .translationFailed("Hy-MT2 runtime is not configured for this request.")
     )
   ]
 }

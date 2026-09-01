@@ -32,15 +32,13 @@ enum SessionState: Equatable {
   }
 }
 
-enum SpokenLanguage: String, CaseIterable, Identifiable {
-  case korean = "Korean"
-  case chinese = "Chinese"
-  case japanese = "Japanese"
-  case english = "English"
-  case french = "French"
-  case spanish = "Spanish"
+struct SpeechSourceLanguage: Identifiable, Hashable {
+  static let automatic = SpeechSourceLanguage(identifier: "automatic", name: "Automatic")
 
-  var id: String { rawValue }
+  let identifier: String
+  let name: String
+
+  var id: String { identifier }
 }
 
 struct TargetLanguage: Identifiable, Hashable {
@@ -53,13 +51,23 @@ struct TargetLanguage: Identifiable, Hashable {
     ("es", "Spanish"), ("ja", "Japanese"), ("tr", "Turkish"), ("ru", "Russian"),
     ("ar", "Arabic"), ("ko", "Korean"), ("th", "Thai"), ("it", "Italian"),
     ("de", "German"), ("vi", "Vietnamese"), ("ms", "Malay"), ("id", "Indonesian"),
-    ("tl", "Tagalog"), ("hi", "Hindi"), ("zh-Hant", "Traditional Chinese"), ("pl", "Polish"),
+    ("tl", "Filipino"), ("hi", "Hindi"), ("zh-Hant", "Traditional Chinese"), ("pl", "Polish"),
     ("cs", "Czech"), ("nl", "Dutch"), ("km", "Khmer"), ("my", "Burmese"),
     ("fa", "Persian"), ("gu", "Gujarati"), ("ur", "Urdu"), ("te", "Telugu"),
     ("mr", "Marathi"), ("he", "Hebrew"), ("bn", "Bengali"), ("ta", "Tamil"),
     ("uk", "Ukrainian"), ("bo", "Tibetan"), ("kk", "Kazakh"), ("mn", "Mongolian"),
     ("ug", "Uyghur"), ("yue", "Cantonese")
   ].map(TargetLanguage.init)
+}
+
+struct HyMT2Request: Equatable {
+  let userMessage: String
+
+  init(sourceText: String, targetLanguage: TargetLanguage) {
+    let instruction = "Translate the following text into \(targetLanguage.name). "
+      + "Note that you should only output the translated result without any additional explanation:"
+    userMessage = "\(instruction)\n\(sourceText)"
+  }
 }
 
 extension TargetLanguage {

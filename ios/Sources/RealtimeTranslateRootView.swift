@@ -43,9 +43,7 @@ private struct SetupView: View {
       speakerSection(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA)
       speakerSection(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB)
       Section("Permissions") {
-        Text(
-          "Microphone and speech recognition permissions and an on-device model for the selected language are required."
-        )
+        Text("Microphone and speech recognition permissions are required.")
           .foregroundStyle(DesignToken.textSecondary)
         Button("Allow Microphone Access", action: viewModel.requestMicrophonePermission)
         Button("Open App Settings", action: viewModel.openAppSettings)
@@ -54,11 +52,11 @@ private struct SetupView: View {
   }
 
   @ViewBuilder private func speakerSection(
-    _ speaker: Speaker, source: Binding<SpokenLanguage>, target: Binding<TargetLanguage>
+    _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>
   ) -> some View {
     Section("\(speaker.rawValue) Settings") {
       Picker("\(speaker.rawValue) Spoken Language", selection: source) {
-        ForEach(viewModel.availableSourceLanguages) { Text($0.rawValue).tag($0) }
+        ForEach(viewModel.availableSourceLanguages) { Text($0.name).tag($0) }
       }
       .accessibilityIdentifier("source-language-\(speaker.rawValue)")
       Picker("Translation Language for \(speaker.rawValue)", selection: target) {
@@ -77,8 +75,8 @@ private struct ConversationView: View {
       StatusHeader(state: viewModel.state)
       List(viewModel.items) { ConversationBubble(item: $0) }
         .listStyle(.plain)
-      controls
     }
+    .safeAreaInset(edge: .bottom, spacing: 0) { controls }
   }
 
   private var controls: some View {
@@ -96,6 +94,7 @@ private struct ConversationView: View {
       }
     }
     .padding(16)
+    .background(.bar)
   }
 }
 

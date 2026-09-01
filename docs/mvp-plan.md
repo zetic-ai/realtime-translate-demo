@@ -6,7 +6,7 @@ Build native Android and iOS apps for one device, where two people explicitly as
 
 ## User flow
 
-1. On the setup screen, users select speaking and reading languages for both A and B, then grant microphone and speech-recognition permissions.
+1. On the setup screen, users choose `Automatic` or an OS-provided recognition language and a reading language for both A and B, then grant microphone and speech-recognition permissions.
 2. On the conversation screen, A or B holds their own button. A tap starts recording and a second tap stops it as an accessibility alternative.
 3. Only the active person's partial source text updates. The other button is disabled so exactly one on-device STT session is active.
 4. Releasing the button or tapping to stop finalizes the STT source text.
@@ -15,7 +15,7 @@ Build native Android and iOS apps for one device, where two people explicitly as
 
 ## Pipeline
 
-`User-selected A or B button` -> `Platform on-device STT in the selected speaker language` -> `Finalized source text` -> `Serial Hy-MT2 translation` -> `Chat card in the other person's reading language`
+`User-selected A or B button` -> `Platform on-device STT using Automatic or an OS-provided recognition language` -> `Finalized source text` -> `Serial Hy-MT2 translation` -> `Chat card in the other person's reading language`
 
 | Stage | Component | Responsibility |
 | --- | --- | --- |
@@ -28,11 +28,11 @@ STT and Hy-MT2 inference run off the UI thread. Hy-MT2 uses a serial queue that 
 
 ## Language scope
 
-- Speaking languages for A and B: Korean, Chinese, Japanese, English, French, and Spanish. A language can start only when the device and OS pass on-device STT capability and permission checks.
-- Reading languages for A and B: the 38 UI options in the official Supported Languages table recorded in the [model language compatibility gate](model-compatibility-gate.md).
+- Speaking languages for A and B: `Automatic` or an OS-provided recognition language. The app does not restrict the source-language list; on-device STT availability remains determined by the device, OS, permissions, and downloaded speech assets.
+- Reading languages for A and B: the 38 official Hy-MT2 options in the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
 - A source text translates only into B's reading language, and B source text translates only into A's reading language. Automatic language detection and special handling for same-language pairs are out of scope.
 
-On Android API 31-32, a selected language can start provisionally when an on-device service is available; language-specific failure is reported as `onDeviceUnsupported`. Android API 33 and later distinguish installed and downloadable languages. iOS checks `supportsOnDeviceRecognition`, `isAvailable`, Speech permission, and microphone permission for the selected locale. Neither platform automatically falls back to network STT.
+The app does not preflight or gate a source language. If the platform cannot start the requested on-device recognition session, the app reports the platform error and does not fall back to network STT.
 
 ## Scope and constraints
 
@@ -45,4 +45,4 @@ On Android API 31-32, a selected language can start provisionally when an on-dev
 - Android and iOS implement the same A/B setup, single-active PTT behavior, translation after source finalization, and error-recovery meaning.
 - Each A/B utterance card shows the speaker label, source text, target language for the other person, translated text, and processing or error state in chronological order.
 - Hold-to-talk and tap-toggle provide the same start/stop outcome and have accessibility labels.
-- Every language combination that runs real translation has evidence in the [model language compatibility gate](model-compatibility-gate.md).
+- The reading-language selector matches the 38 official Hy-MT2 entries, and the request builder uses the documented one-user-message prompt.

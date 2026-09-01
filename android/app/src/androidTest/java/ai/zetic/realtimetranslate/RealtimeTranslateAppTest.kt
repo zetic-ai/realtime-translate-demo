@@ -44,14 +44,14 @@ class RealtimeTranslateAppTest {
     @Test fun finalCardDisplaysSpeakerTargetAndTranslationError() {
         val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = "Hy-MT2 runtime verification is incomplete.")))
         setApp(state)
-        composeRule.onNodeWithText("B - Korean").assertIsDisplayed()
+        composeRule.onNodeWithText("B - Automatic (device recognizer)").assertIsDisplayed()
         composeRule.onNodeWithText("For English").assertIsDisplayed()
         composeRule.onNodeWithText("Hy-MT2 runtime verification is incomplete.").assertIsDisplayed()
     }
 
     @Test fun settingsProvideSeparateLanguagePickersForBothSpeakers() {
-        setApp(SessionUiState(SessionPhase.Ready, availableInputLanguages = SpeechLanguage.entries.toSet()))
-        composeRule.onNodeWithContentDescription("Speaker A input language selector: Korean").assertIsDisplayed()
+        setApp(SessionUiState(SessionPhase.Ready))
+        composeRule.onNodeWithContentDescription("Speaker A recognition language: Automatic (device recognizer)").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Speaker B translation language selector: English").assertIsDisplayed()
     }
 
@@ -96,13 +96,12 @@ class RealtimeTranslateAppTest {
         composeRule.setContent { RealtimeTranslateTheme { RealtimeTranslateApp(state, onAction, onOpenAppSettings) } }
     }
 
-    private fun readyConversationState() = SessionUiState(SessionPhase.Ready, conversationStarted = true, availableInputLanguages = SpeechLanguage.entries.toSet())
-    private fun item(speaker: Speaker, transcript: String, final: Boolean) = ConversationItem("1", speaker, SpeechLanguage.Korean, HyMt2Languages.all.first { it.code == "en" }, transcript, final)
+    private fun readyConversationState() = SessionUiState(SessionPhase.Ready, conversationStarted = true)
+    private fun item(speaker: Speaker, transcript: String, final: Boolean) = ConversationItem("1", speaker, SpeechLanguage.Automatic, HyMt2Languages.all.first { it.code == "en" }, transcript, final)
 
     private class FakeTranscriber : SpeechTranscriber {
         lateinit var listener: SpeechTranscriptListener
         var starts = 0
-        override fun probe(languages: List<SpeechLanguage>, onComplete: (SpeechCapabilityResult) -> Unit) = onComplete(SpeechCapabilityResult(languages.toSet()))
         override fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult {
             starts += 1
             this.listener = listener

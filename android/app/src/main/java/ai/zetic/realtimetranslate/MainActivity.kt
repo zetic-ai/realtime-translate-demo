@@ -21,7 +21,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
-        if (isPermissionGranted) viewModel.dispatch(SessionAction.ProbeCapabilities(applicationContext))
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -31,7 +30,6 @@ class MainActivity : ComponentActivity() {
                         permanentlyDenied = !it && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO),
                     ),
                 )
-                if (it) viewModel.dispatch(SessionAction.ProbeCapabilities(applicationContext))
             }
             val context = remember(this) { this }
             RealtimeTranslateTheme {

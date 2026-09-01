@@ -16,6 +16,7 @@ targets:
         INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_NAME: RealtimeTranslate
         GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
     scheme:
       testTargets:
         - RealtimeTranslateTests

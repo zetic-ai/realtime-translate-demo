@@ -7,11 +7,6 @@ enum SpeechPermission: Equatable {
   case required
 }
 
-enum SpeechLanguageCapability: Equatable {
-  case available
-  case unavailable(String)
-}
-
 enum PlatformSpeechError: LocalizedError {
   case microphonePermissionRequired
   case speechPermissionRequired
@@ -30,9 +25,9 @@ enum PlatformSpeechError: LocalizedError {
 @MainActor
 protocol SpeechRecognizing: AnyObject {
   func requestPermissions() async -> SpeechPermission
-  func capability(for language: SpokenLanguage) -> SpeechLanguageCapability
+  func availableSourceLanguages() -> [SpeechSourceLanguage]
   func start(
-    source: SpokenLanguage,
+    source: SpeechSourceLanguage,
     onPartial: @escaping (String) -> Void,
     onFinal: @escaping (String) -> Void
   ) throws
@@ -52,32 +47,23 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     return microphoneGranted && speechGranted ? .granted : .required
   }
 
-  func capability(for language: SpokenLanguage) -> SpeechLanguageCapability {
-    guard let recognizer = SFSpeechRecognizer(locale: language.locale) else {
-      return .unavailable("\(language.rawValue) speech recognition is unavailable on this device.")
-    }
-    guard recognizer.isAvailable else {
-      return .unavailable("The \(language.rawValue) speech recognition service is unavailable.")
-    }
-    guard recognizer.supportsOnDeviceRecognition else {
-      return .unavailable("The on-device \(language.rawValue) speech recognition model is not installed.")
-    }
-    return .available
+  func availableSourceLanguages() -> [SpeechSourceLanguage] {
+    SFSpeechRecognizer.supportedLocales()
+      .map { locale in
+        SpeechSourceLanguage(
+          identifier: locale.identifier,
+          name: locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier
+        )
+      }
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
   }
 
   func start(
-    source: SpokenLanguage,
+    source: SpeechSourceLanguage,
     onPartial: @escaping (String) -> Void,
     onFinal: @escaping (String) -> Void
   ) throws {
     stop()
-    switch capability(for: source) {
-    case .available:
-      break
-    case let .unavailable(reason):
-      throw PlatformSpeechError.unsupportedLanguage(reason)
-    }
-
     let session = AVAudioSession.sharedInstance()
     do {
       try session.setCategory(.record, mode: .measurement, options: [])
@@ -88,7 +74,7 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
 
     guard let recognizer = SFSpeechRecognizer(locale: source.locale) else {
       throw PlatformSpeechError.unsupportedLanguage(
-        "\(source.rawValue) speech recognition is unavailable on this device."
+        "\(source.name) speech recognition is unavailable on this device."
       )
     }
     let request = SFSpeechAudioBufferRecognitionRequest()
@@ -170,15 +156,8 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
   }
 }
 
-private extension SpokenLanguage {
+private extension SpeechSourceLanguage {
   var locale: Locale {
-    switch self {
-    case .korean: Locale(identifier: "ko-KR")
-    case .chinese: Locale(identifier: "zh-CN")
-    case .japanese: Locale(identifier: "ja-JP")
-    case .english: Locale(identifier: "en-US")
-    case .french: Locale(identifier: "fr-FR")
-    case .spanish: Locale(identifier: "es-ES")
-    }
+    identifier == Self.automatic.identifier ? .current : Locale(identifier: identifier)
   }
 }

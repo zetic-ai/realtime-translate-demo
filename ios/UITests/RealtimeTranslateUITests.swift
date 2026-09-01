@@ -27,6 +27,14 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Start New Session"].exists)
   }
 
+  func testReadyControlsRemainHittableAboveTheHomeIndicator() {
+    let app = launch(state: "ready")
+    let endSession = app.buttons["End Session"]
+
+    XCTAssertTrue(endSession.isHittable)
+    XCTAssertLessThan(endSession.frame.maxY, app.frame.maxY)
+  }
+
   private func launch(state: String) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = ["-uiState", state]

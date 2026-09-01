@@ -8,9 +8,8 @@ enum class Speaker(val label: String) {
     fun other() = if (this == A) B else A
 }
 
-enum class SpeechLanguage(val displayName: String, val code: String) {
-    Korean("Korean", "ko"), Chinese("Chinese", "zh"), Japanese("Japanese", "ja"),
-    English("English", "en"), French("French", "fr"), Spanish("Spanish", "es"),
+enum class SpeechLanguage(val displayName: String) {
+    Automatic("Automatic (device recognizer)"),
 }
 
 data class TranslationLanguage(val code: String, val displayName: String)
@@ -21,7 +20,7 @@ object HyMt2Languages {
         TranslationLanguage("es", "Spanish"), TranslationLanguage("ja", "Japanese"), TranslationLanguage("tr", "Turkish"), TranslationLanguage("ru", "Russian"),
         TranslationLanguage("ar", "Arabic"), TranslationLanguage("ko", "Korean"), TranslationLanguage("th", "Thai"), TranslationLanguage("it", "Italian"),
         TranslationLanguage("de", "German"), TranslationLanguage("vi", "Vietnamese"), TranslationLanguage("ms", "Malay"), TranslationLanguage("id", "Indonesian"),
-        TranslationLanguage("tl", "Tagalog"), TranslationLanguage("hi", "Hindi"), TranslationLanguage("zh-Hant", "Traditional Chinese"), TranslationLanguage("pl", "Polish"),
+        TranslationLanguage("fil", "Filipino"), TranslationLanguage("hi", "Hindi"), TranslationLanguage("zh-Hant", "Traditional Chinese"), TranslationLanguage("pl", "Polish"),
         TranslationLanguage("cs", "Czech"), TranslationLanguage("nl", "Dutch"), TranslationLanguage("km", "Khmer"), TranslationLanguage("my", "Burmese"),
         TranslationLanguage("fa", "Persian"), TranslationLanguage("gu", "Gujarati"), TranslationLanguage("ur", "Urdu"), TranslationLanguage("te", "Telugu"),
         TranslationLanguage("mr", "Marathi"), TranslationLanguage("he", "Hebrew"), TranslationLanguage("bn", "Bengali"), TranslationLanguage("ta", "Tamil"),
@@ -31,7 +30,7 @@ object HyMt2Languages {
 }
 
 data class SpeakerSettings(
-    val inputLanguage: SpeechLanguage = SpeechLanguage.Korean,
+    val inputLanguage: SpeechLanguage = SpeechLanguage.Automatic,
     val readingLanguage: TranslationLanguage = HyMt2Languages.all.first { it.code == "en" },
 )
 
@@ -53,10 +52,6 @@ data class SessionUiState(
     val conversations: List<ConversationItem> = emptyList(),
     val conversationStarted: Boolean = false,
     val errorMessage: String? = null,
-    val modelGateMessage: String? = null,
-    val availableInputLanguages: Set<SpeechLanguage> = emptySet(),
-    val downloadableInputLanguages: Set<SpeechLanguage> = emptySet(),
-    val sourceCapabilityMessage: String? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)
     fun activeSpeaker(): Speaker? = when (phase) {
