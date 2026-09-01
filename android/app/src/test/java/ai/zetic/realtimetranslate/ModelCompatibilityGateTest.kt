@@ -24,8 +24,8 @@ class ModelCompatibilityGateTest {
     @Test
     fun `requires only API 31 on-device recognition and never online fallback`() {
         assertTrue(OnDeviceRecognitionEligibility.failureFor(30, true, true)?.contains("API 31") == true)
-        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, false, true)?.contains("마이크 권한") == true)
-        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, true, false)?.contains("온라인 인식으로 전환하지 않습니다") == true)
+        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, false, true)?.contains("Microphone permission") == true)
+        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, true, false)?.contains("will not fall back to online recognition") == true)
         assertEquals(null, OnDeviceRecognitionEligibility.failureFor(31, true, true))
     }
 }

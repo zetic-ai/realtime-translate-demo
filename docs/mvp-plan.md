@@ -1,48 +1,48 @@
-# 2인 Push-to-Talk 번역 MVP 기획
+# Two-Speaker Push-to-Talk Translation MVP Plan
 
-## 목표
+## Goal
 
-한 기기에서 두 사용자가 A 또는 B 발화 버튼으로 자신의 말을 직접 지정하고, 각 플랫폼의 온디바이스 STT와 `SJ_zetic/Hy-MT2-1.8B` 번역으로 상대방에게 읽을 문장을 채팅 형태로 제공하는 Android 및 iOS 네이티브 앱을 만든다.
+Build native Android and iOS apps for one device, where two people explicitly assign their utterances with A or B controls. Each platform uses on-device STT, and `SJ_zetic/Hy-MT2-1.8B` translates finalized source text into the other person's reading language in a chat-style card.
 
-## 사용자 흐름
+## User flow
 
-1. 사용자는 설정 화면에서 A와 B 각각의 말하기 언어와 읽을 번역 언어를 선택하고, 마이크·음성 인식 권한을 허용한다.
-2. 대화 화면에서 A 또는 B가 자신의 버튼을 길게 누른다. 길게 누르기 어려우면 탭하여 시작하고 다시 탭하여 종료한다.
-3. 누른 사용자의 진행 중 원문은 해당 사용자 카드만 갱신한다. 다른 버튼은 한 번에 하나의 온디바이스 STT만 활성화하기 위해 비활성화한다.
-4. 사용자가 버튼을 놓거나 탭 종료하면 STT의 확정 원문을 만든다.
-5. A 발화는 B의 읽을 언어로, B 발화는 A의 읽을 언어로 Hy-MT2에 직렬 번역한다. 번역이 끝나면 같은 카드에 표시한다.
-6. 번역 실패 시 원문을 보존하고, 번역 칸에 가짜 결과 대신 오류와 재시도 동작을 표시한다.
+1. On the setup screen, users select speaking and reading languages for both A and B, then grant microphone and speech-recognition permissions.
+2. On the conversation screen, A or B holds their own button. A tap starts recording and a second tap stops it as an accessibility alternative.
+3. Only the active person's partial source text updates. The other button is disabled so exactly one on-device STT session is active.
+4. Releasing the button or tapping to stop finalizes the STT source text.
+5. A source text is translated serially into B's reading language; B source text is translated serially into A's reading language with Hy-MT2. The translation appears in the same card.
+6. When translation fails, the source text remains visible and the translation area shows an error and retry action instead of a fabricated result.
 
-## 파이프라인
+## Pipeline
 
-`A 또는 B의 사용자 지정 버튼` → `선택한 사용자 언어의 플랫폼 온디바이스 STT` → `확정 원문` → `Hy-MT2 직렬 번역` → `상대방 읽기 언어의 채팅 카드`
+`User-selected A or B button` -> `Platform on-device STT in the selected speaker language` -> `Finalized source text` -> `Serial Hy-MT2 translation` -> `Chat card in the other person's reading language`
 
-| 단계 | 구성 요소 | 책임 |
+| Stage | Component | Responsibility |
 | --- | --- | --- |
-| 발화자 귀속 | A/B push-to-talk 제어 | 사용자가 발화자를 명시적으로 지정 |
-| Android STT | `SpeechRecognizer.createOnDeviceSpeechRecognizer()` | 지정 화자의 온디바이스 부분/확정 원문 생성 |
-| iOS STT | `SFSpeechRecognizer` + `requiresOnDeviceRecognition = true` | 지정 화자의 온디바이스 부분/확정 원문 생성 |
-| 번역 | `SJ_zetic/Hy-MT2-1.8B` | 확정 원문을 상대방 읽기 언어로 번역 |
+| Speaker assignment | A/B push-to-talk controls | The user explicitly identifies the speaker. |
+| Android STT | `SpeechRecognizer.createOnDeviceSpeechRecognizer()` | Produces partial and final on-device source text for the selected speaker. |
+| iOS STT | `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true` | Produces partial and final on-device source text for the selected speaker. |
+| Translation | `SJ_zetic/Hy-MT2-1.8B` | Translates finalized source text into the other person's reading language. |
 
-STT와 Hy-MT2 추론은 UI 스레드 밖에서 실행한다. Hy-MT2는 한 번에 하나의 확정 발화만 처리하는 직렬 큐로 관리한다. 번역 런타임의 모델 초기화 또는 실행 검증이 끝나지 않았거나 실패하면 번역문을 만들지 않고 오류를 표시한다.
+STT and Hy-MT2 inference run off the UI thread. Hy-MT2 uses a serial queue that processes one finalized utterance at a time. If model initialization or runtime execution has not been verified or fails, the app shows an error rather than producing a translation.
 
-## 언어 범위
+## Language scope
 
-- A와 B의 말하기 언어: 한국어, 중국어, 일본어, 영어, 프랑스어, 스페인어. 각 사용자 언어는 해당 기기·OS의 온디바이스 STT capability와 권한 검사를 통과한 경우에만 시작할 수 있다.
-- A와 B의 읽을 번역 언어: [모델 언어 호환성 게이트](model-compatibility-gate.md)의 공식 Supported Languages 표에 기록된 38개 UI 선택 항목.
-- A의 원문은 B의 읽을 언어로, B의 원문은 A의 읽을 언어로만 번역한다. 자동 언어 감지와 같은 언어쌍의 특별 처리는 범위에 포함하지 않는다.
+- Speaking languages for A and B: Korean, Chinese, Japanese, English, French, and Spanish. A language can start only when the device and OS pass on-device STT capability and permission checks.
+- Reading languages for A and B: the 38 UI options in the official Supported Languages table recorded in the [model language compatibility gate](model-compatibility-gate.md).
+- A source text translates only into B's reading language, and B source text translates only into A's reading language. Automatic language detection and special handling for same-language pairs are out of scope.
 
-Android API 31~32는 온디바이스 서비스가 있을 때 선택 언어를 provisional로 시작할 수 있으며, 언어별 실패는 `onDeviceUnsupported`으로 표시한다. API 33 이상은 installed와 downloadable 상태를 구분한다. iOS는 선택 locale의 `supportsOnDeviceRecognition`, `isAvailable`, Speech·마이크 권한을 확인한다. 어느 플랫폼에서도 온디바이스 STT가 불가할 때 네트워크 STT로 자동 fallback하지 않는다.
+On Android API 31-32, a selected language can start provisionally when an on-device service is available; language-specific failure is reported as `onDeviceUnsupported`. Android API 33 and later distinguish installed and downloadable languages. iOS checks `supportsOnDeviceRecognition`, `isAvailable`, Speech permission, and microphone permission for the selected locale. Neither platform automatically falls back to network STT.
 
-## 범위와 제약
+## Scope and constraints
 
-- 한 기기에서 A와 B의 동시 발화 또는 두 STT의 동시 실행은 지원하지 않는다. 활성 발화가 있으면 반대 버튼을 비활성화한다.
-- 자동 화자 분리, 별도 음성 모델, 추가 오디오 분기 처리, 음성·대화 기록의 영구 저장은 제공하지 않는다.
-- 계정, 로그인, 클라우드 동기화, 파일 내보내기·공유, 전화 통화 녹음은 제공하지 않는다.
+- One device does not support simultaneous A/B speech or concurrent STT sessions. The opposite button is disabled while an utterance is active.
+- Automatic speaker separation, separate voice models, additional audio fan-out, and persistent storage of audio or conversations are out of scope.
+- Accounts, sign-in, cloud sync, export or sharing, and telephone-call recording are out of scope.
 
-## 완료 기준
+## Completion criteria
 
-- Android와 iOS가 동일한 A/B 설정, 단일 활성 PTT, 원문 확정 후 번역, 오류 복구 의미를 구현한다.
-- 각 A/B 발화 카드에 사용자 라벨, 원문, 상대방 대상 번역문, 처리·오류 상태가 시간순으로 표시된다.
-- 길게 누르기와 탭 토글이 같은 시작·종료 결과를 제공하며 접근성 라벨을 갖는다.
-- 실제 번역을 실행한 각 언어 조합은 [모델 언어 호환성 게이트](model-compatibility-gate.md)의 증거를 갖는다.
+- Android and iOS implement the same A/B setup, single-active PTT behavior, translation after source finalization, and error-recovery meaning.
+- Each A/B utterance card shows the speaker label, source text, target language for the other person, translated text, and processing or error state in chronological order.
+- Hold-to-talk and tap-toggle provide the same start/stop outcome and have accessibility labels.
+- Every language combination that runs real translation has evidence in the [model language compatibility gate](model-compatibility-gate.md).

@@ -24,10 +24,10 @@ final class RealtimeTranslateTests: XCTestCase {
     let viewModel = readyViewModel(recognizer)
 
     viewModel.beginTurn(.a)
-    recognizer.sendPartial("안녕")
+    recognizer.sendPartial("Hello")
     XCTAssertEqual(viewModel.items.last?.speaker, .a)
-    XCTAssertEqual(viewModel.items.last?.transcript, "안녕")
-    recognizer.sendFinal("안녕하세요")
+    XCTAssertEqual(viewModel.items.last?.transcript, "Hello")
+    recognizer.sendFinal("Hello there")
     XCTAssertEqual(viewModel.state, .listening(.a))
     XCTAssertEqual(recognizer.stopCount, 0)
     viewModel.endTurn(.a)
@@ -54,7 +54,7 @@ final class RealtimeTranslateTests: XCTestCase {
     let viewModel = readyViewModel(recognizer)
 
     viewModel.beginTurn(.a)
-    recognizer.sendFinal("안녕하세요")
+    recognizer.sendFinal("Hello there")
     XCTAssertEqual(viewModel.state, .listening(.a))
     XCTAssertEqual(recognizer.stopCount, 0)
 

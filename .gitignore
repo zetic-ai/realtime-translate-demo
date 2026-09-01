@@ -19,3 +19,6 @@ ios/Pods/
 models/
 *.ztc
 .env
+
+# Local audit evidence (kept outside the product repository)
+work_logs/

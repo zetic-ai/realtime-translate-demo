@@ -57,7 +57,7 @@ class SessionViewModel(
         if (!current.conversationStarted || current.phase != SessionPhase.Ready) return
         val settings = current.settingsFor(speaker)
         if (settings.inputLanguage !in current.availableInputLanguages && settings.inputLanguage !in current.downloadableInputLanguages) {
-            mutableState.value = current.copy(phase = SessionPhase.Error, errorMessage = current.sourceCapabilityMessage ?: "${speaker.label}의 선택 언어는 온디바이스 STT 지원 확인이 필요합니다.")
+            mutableState.value = current.copy(phase = SessionPhase.Error, errorMessage = current.sourceCapabilityMessage ?: "The selected language for speaker ${speaker.label} needs on-device STT support verification.")
             return
         }
         transcriber?.destroy()
@@ -79,13 +79,13 @@ class SessionViewModel(
 
     private fun probeCapabilities(context: Context) {
         val probe = transcriberFactory(context.applicationContext)
-        mutableState.value = mutableState.value.copy(sourceCapabilityMessage = "발화 언어별 온디바이스 STT 지원을 확인 중입니다.")
+        mutableState.value = mutableState.value.copy(sourceCapabilityMessage = "Checking on-device STT support for each spoken language.")
         probe.probe(SpeechLanguage.entries.toList()) { result ->
             probe.destroy()
             mutableState.value = mutableState.value.copy(
                 availableInputLanguages = result.available,
                 downloadableInputLanguages = result.downloadable,
-                sourceCapabilityMessage = result.message ?: if (result.available.isEmpty()) "이 기기에서 사용할 수 있는 온디바이스 발화 언어가 없습니다." else null,
+                sourceCapabilityMessage = result.message ?: if (result.available.isEmpty()) "No on-device spoken languages are available on this device." else null,
             )
         }
     }
@@ -142,7 +142,7 @@ class SessionViewModel(
         }
         mutableState.value = current.copy(phase = translatingPhase(speaker))
         when (val gate = modelGate.check(item.sourceLanguage, item.targetLanguage)) {
-            GateResult.Ready -> failTranslation(item.id, "Hy-MT2 번역 실행기는 아직 연결되지 않았습니다.")
+            GateResult.Ready -> failTranslation(item.id, "The Hy-MT2 translation runtime is not connected yet.")
             is GateResult.Blocked -> failTranslation(item.id, gate.reason)
         }
     }

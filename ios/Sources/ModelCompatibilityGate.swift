@@ -6,6 +6,6 @@ struct ModelCompatibilityGate {
   func translationError(for source: SpokenLanguage, target: TargetLanguage) -> String? {
     _ = source
     _ = target
-    return "\(Self.translationModel) 런타임과 아티팩트 호환성 검증이 완료되지 않아 번역할 수 없습니다."
+    return "Translation is unavailable because \(Self.translationModel) compatibility has not been verified."
   }
 }

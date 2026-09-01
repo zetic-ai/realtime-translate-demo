@@ -23,36 +23,36 @@ class RealtimeTranslateAppTest {
     @Test fun permanentPermissionDenialOffersAppSettings() {
         var opened = false
         setApp(SessionUiState(SessionPhase.PermissionRequired, permissionPermanentlyDenied = true), onOpenAppSettings = { opened = true })
-        composeRule.onNodeWithContentDescription("앱 설정 열기").performClick()
+        composeRule.onNodeWithContentDescription("Open app settings").performClick()
         assertEquals(true, opened)
     }
 
     @Test fun aListeningDisablesBAndShowsPartialCard() {
-        setApp(readyConversationState().copy(phase = SessionPhase.ListeningA, conversations = listOf(item(Speaker.A, "안녕", false))))
-        composeRule.onNodeWithText("안녕").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("A 발화 종료").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("A 발화가 진행 중이므로 B 발화를 시작할 수 없음").assertIsNotEnabled()
+        setApp(readyConversationState().copy(phase = SessionPhase.ListeningA, conversations = listOf(item(Speaker.A, "Hello", false))))
+        composeRule.onNodeWithText("Hello").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Stop speaker A").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Speaker B cannot start while speaker A is active").assertIsNotEnabled()
     }
 
     @Test fun tapAlternativeDispatchesToggle() {
         var action: UiAction? = null
         setApp(readyConversationState(), onAction = { action = it })
-        composeRule.onNodeWithContentDescription("A 발화 시작").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        composeRule.onNodeWithContentDescription("Start speaker A").performSemanticsAction(SemanticsActions.OnClick) { it() }
         assertEquals(UiAction.TogglePtt(Speaker.A), action)
     }
 
     @Test fun finalCardDisplaysSpeakerTargetAndTranslationError() {
-        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = "Hy-MT2 실행 검증이 완료되지 않았습니다.")))
+        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = "Hy-MT2 runtime verification is incomplete.")))
         setApp(state)
-        composeRule.onNodeWithText("B · 한국어").assertIsDisplayed()
-        composeRule.onNodeWithText("English에게").assertIsDisplayed()
-        composeRule.onNodeWithText("Hy-MT2 실행 검증이 완료되지 않았습니다.").assertIsDisplayed()
+        composeRule.onNodeWithText("B - Korean").assertIsDisplayed()
+        composeRule.onNodeWithText("For English").assertIsDisplayed()
+        composeRule.onNodeWithText("Hy-MT2 runtime verification is incomplete.").assertIsDisplayed()
     }
 
     @Test fun settingsProvideSeparateLanguagePickersForBothSpeakers() {
         setApp(SessionUiState(SessionPhase.Ready, availableInputLanguages = SpeechLanguage.entries.toSet()))
-        composeRule.onNodeWithContentDescription("A 말하기 언어 선택: 한국어").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("B 읽을 번역 언어 선택: English").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Speaker A input language selector: Korean").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Speaker B translation language selector: English").assertIsDisplayed()
     }
 
     @Test fun viewModelEnforcesMutualExclusionRoutesTargetsAndRecoversAfterTranslationGate() {
@@ -85,7 +85,7 @@ class RealtimeTranslateAppTest {
 
         composeRule.runOnUiThread {
             viewModel.dispatch(SessionAction.PttPress(composeRule.activity, Speaker.B))
-            adapter.listener.onPartial("안녕하세요")
+            adapter.listener.onPartial("Hello")
         }
         assertEquals(SessionPhase.ListeningB, viewModel.state.value.phase)
         assertEquals(2, adapter.starts)

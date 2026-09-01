@@ -63,7 +63,7 @@ class AndroidOnDeviceSpeechTranscriber(
         if (failure != null) {
             onComplete(SpeechCapabilityResult(emptySet(), message = failure))
         } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            onComplete(SpeechCapabilityResult(languages.toSet(), message = "언어별 오프라인 지원은 세션 시작 시 확인합니다 (Android 12~13, API 31~32)."))
+            onComplete(SpeechCapabilityResult(languages.toSet(), message = "Offline support for each language will be checked when the session starts (Android 12-13, API 31-32)."))
         } else {
             probeOnApi33(languages, onComplete)
         }
@@ -71,7 +71,7 @@ class AndroidOnDeviceSpeechTranscriber(
 
     override fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            return SpeechStartResult.Failed("온디바이스 음성 인식은 Android 메인 스레드에서 시작해야 합니다.")
+            return SpeechStartResult.Failed("On-device speech recognition must start on the Android main thread.")
         }
         OnDeviceRecognitionEligibility.failureFor(
             sdkInt = Build.VERSION.SDK_INT,
@@ -120,25 +120,25 @@ class AndroidOnDeviceSpeechTranscriber(
                 } else if (support.supportedOnDeviceLanguages.any { it.matchesLanguage(tag) }) {
                     requestModelDownload(language, intent)
                 } else {
-                    activeListener?.onError("${language.displayName} 온디바이스 음성 모델을 이 기기에서 지원하지 않습니다.")
+                    activeListener?.onError("This device does not support the ${language.displayName} on-device speech model.")
                 }
             }
 
             override fun onError(error: Int) {
-                activeListener?.onError("온디바이스 음성 모델 지원 여부를 확인할 수 없습니다 (오류 $error).")
+                activeListener?.onError("Unable to check on-device speech model support (error $error).")
             }
         })
-        return SpeechStartResult.Downloading("${language.displayName} 온디바이스 음성 모델 지원 여부를 확인 중입니다.")
+        return SpeechStartResult.Downloading("Checking ${language.displayName} on-device speech model support.")
     }
 
     @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
     private fun requestModelDownload(language: SpeechLanguage, intent: Intent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            activeListener?.onModelDownload("온디바이스 음성 모델을 다운로드 중입니다.", restartRequired = false)
+            activeListener?.onModelDownload("Downloading the on-device speech model.", restartRequired = false)
             downloadWithEvents(language, intent)
         } else {
             recognizer?.triggerModelDownload(intent)
-            activeListener?.onModelDownload("${language.displayName} 음성 모델 다운로드를 요청했습니다. 완료 후 세션을 다시 시작하세요.", restartRequired = true)
+            activeListener?.onModelDownload("Requested the ${language.displayName} speech model download. Restart the session after it completes.", restartRequired = true)
         }
     }
 
@@ -154,7 +154,7 @@ class AndroidOnDeviceSpeechTranscriber(
             override fun onScheduled() = Unit
 
             override fun onError(error: Int) {
-                activeListener?.onError("온디바이스 음성 모델 다운로드에 실패했습니다 (오류 $error).")
+                activeListener?.onError("The on-device speech model download failed (error $error).")
             }
         })
     }
@@ -179,9 +179,9 @@ class AndroidOnDeviceSpeechTranscriber(
             if (stopping) {
                 activeListener?.onStopped()
             } else if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
-                activeListener?.onDeviceUnsupported("${language.displayName} 온디바이스 음성 모델을 이 기기에서 지원하지 않거나 설치할 수 없습니다.")
+                activeListener?.onDeviceUnsupported("This device does not support or cannot install the ${language.displayName} on-device speech model.")
             } else if (listening) {
-                activeListener?.onError("온디바이스 음성 인식 중 오류가 발생했습니다 (오류 $error).")
+                activeListener?.onError("On-device speech recognition failed (error $error).")
             }
         }
         override fun onResults(results: android.os.Bundle?) {
@@ -242,9 +242,9 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
 
 object OnDeviceRecognitionEligibility {
     fun failureFor(sdkInt: Int, hasRecordAudioPermission: Boolean, isOnDeviceRecognizerAvailable: Boolean): String? = when {
-        sdkInt < Build.VERSION_CODES.S -> "이 기기는 Android 12(API 31) 이상 온디바이스 음성 인식이 필요합니다."
-        !hasRecordAudioPermission -> "마이크 권한이 필요합니다."
-        !isOnDeviceRecognizerAvailable -> "이 기기에는 온디바이스 음성 인식기가 없습니다. 온라인 인식으로 전환하지 않습니다."
+        sdkInt < Build.VERSION_CODES.S -> "This device requires Android 12 (API 31) or later for on-device speech recognition."
+        !hasRecordAudioPermission -> "Microphone permission is required."
+        !isOnDeviceRecognizerAvailable -> "This device has no on-device speech recognizer. The app will not fall back to online recognition."
         else -> null
     }
 }

@@ -66,7 +66,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     let language = sourceLanguage(for: speaker)
     guard availableSourceLanguages.contains(language) else {
       state = .error(
-        "\(speaker.rawValue)의 \(language.rawValue) 온디바이스 음성 인식 모델을 사용할 수 없습니다."
+        "The on-device \(language.rawValue) speech recognition model is unavailable for \(speaker.rawValue)."
       )
       return
     }
@@ -180,14 +180,14 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   private static let previewItems = [
     ConversationItem(
-      id: UUID(), speaker: .a, transcript: "안녕하세요.", targetLanguage: .hyMT2Candidates[1],
-      translation: "Hello.", state: .translated
+      id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
+      translation: "Bonjour.", state: .translated
     )
   ]
   private static let failedPreviewItems = [
     ConversationItem(
       id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9], translation: nil,
-      state: .translationFailed("SJ_zetic/Hy-MT2-1.8B 런타임과 아티팩트 호환성 검증이 완료되지 않았습니다.")
+      state: .translationFailed("SJ_zetic/Hy-MT2-1.8B runtime and artifact compatibility has not been verified.")
     )
   ]
 }

@@ -20,8 +20,8 @@ enum PlatformSpeechError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .microphonePermissionRequired: "마이크 권한이 필요합니다."
-    case .speechPermissionRequired: "음성 인식 권한이 필요합니다."
+    case .microphonePermissionRequired: "Microphone permission is required."
+    case .speechPermissionRequired: "Speech recognition permission is required."
     case let .unsupportedLanguage(reason), let .unavailable(reason): reason
     }
   }
@@ -54,13 +54,13 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
 
   func capability(for language: SpokenLanguage) -> SpeechLanguageCapability {
     guard let recognizer = SFSpeechRecognizer(locale: language.locale) else {
-      return .unavailable("이 기기에서는 \(language.rawValue) 음성 인식을 사용할 수 없습니다.")
+      return .unavailable("\(language.rawValue) speech recognition is unavailable on this device.")
     }
     guard recognizer.isAvailable else {
-      return .unavailable("\(language.rawValue) 음성 인식 서비스를 사용할 수 없습니다.")
+      return .unavailable("The \(language.rawValue) speech recognition service is unavailable.")
     }
     guard recognizer.supportsOnDeviceRecognition else {
-      return .unavailable("\(language.rawValue)의 온디바이스 음성 인식 모델이 설치되어 있지 않습니다.")
+      return .unavailable("The on-device \(language.rawValue) speech recognition model is not installed.")
     }
     return .available
   }
@@ -83,11 +83,13 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
       try session.setCategory(.record, mode: .measurement, options: [])
       try session.setActive(true, options: .notifyOthersOnDeactivation)
     } catch {
-      throw PlatformSpeechError.unavailable("마이크를 시작할 수 없습니다: \(error.localizedDescription)")
+      throw PlatformSpeechError.unavailable("Unable to start the microphone: \(error.localizedDescription)")
     }
 
     guard let recognizer = SFSpeechRecognizer(locale: source.locale) else {
-      throw PlatformSpeechError.unsupportedLanguage("이 기기에서는 \(source.rawValue) 음성 인식을 사용할 수 없습니다.")
+      throw PlatformSpeechError.unsupportedLanguage(
+        "\(source.rawValue) speech recognition is unavailable on this device."
+      )
     }
     let request = SFSpeechAudioBufferRecognitionRequest()
     Self.configure(request)
@@ -118,7 +120,7 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
       try engine.start()
     } catch {
       stop()
-      throw PlatformSpeechError.unavailable("마이크를 시작할 수 없습니다: \(error.localizedDescription)")
+      throw PlatformSpeechError.unavailable("Unable to start the microphone: \(error.localizedDescription)")
     }
   }
 

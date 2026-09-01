@@ -9,8 +9,8 @@ enum class Speaker(val label: String) {
 }
 
 enum class SpeechLanguage(val displayName: String, val code: String) {
-    Korean("한국어", "ko"), Chinese("中文", "zh"), Japanese("日本語", "ja"),
-    English("English", "en"), French("Français", "fr"), Spanish("Español", "es"),
+    Korean("Korean", "ko"), Chinese("Chinese", "zh"), Japanese("Japanese", "ja"),
+    English("English", "en"), French("French", "fr"), Spanish("Spanish", "es"),
 }
 
 data class TranslationLanguage(val code: String, val displayName: String)

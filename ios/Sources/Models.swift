@@ -21,24 +21,24 @@ enum SessionState: Equatable {
 
   var title: String {
     switch self {
-    case .permissionRequired: "마이크 권한 필요"
-    case .ready: "대화 준비됨"
-    case let .listening(speaker): "\(speaker.rawValue)가 말하는 중"
-    case let .finalizing(speaker): "\(speaker.rawValue) 원문 확정 중"
-    case let .translating(speaker): "\(speaker.counterpart.rawValue)에게 번역 중"
-    case .ended: "세션이 종료되었습니다"
-    case .error: "처리할 수 없습니다"
+    case .permissionRequired: "Microphone Permission Required"
+    case .ready: "Ready to Talk"
+    case let .listening(speaker): "\(speaker.rawValue) is speaking"
+    case let .finalizing(speaker): "Finalizing \(speaker.rawValue)'s transcript"
+    case let .translating(speaker): "Translating for \(speaker.counterpart.rawValue)"
+    case .ended: "Session Ended"
+    case .error: "Unable to Process"
     }
   }
 }
 
 enum SpokenLanguage: String, CaseIterable, Identifiable {
-  case korean = "한국어"
-  case chinese = "중국어"
-  case japanese = "일본어"
-  case english = "영어"
-  case french = "프랑스어"
-  case spanish = "스페인어"
+  case korean = "Korean"
+  case chinese = "Chinese"
+  case japanese = "Japanese"
+  case english = "English"
+  case french = "French"
+  case spanish = "Spanish"
 
   var id: String { rawValue }
 }
@@ -49,16 +49,16 @@ struct TargetLanguage: Identifiable, Hashable {
   var id: String { code }
 
   static let hyMT2Candidates = [
-    ("zh", "중국어"), ("en", "영어"), ("fr", "프랑스어"), ("pt", "포르투갈어"),
-    ("es", "스페인어"), ("ja", "일본어"), ("tr", "터키어"), ("ru", "러시아어"),
-    ("ar", "아랍어"), ("ko", "한국어"), ("th", "태국어"), ("it", "이탈리아어"),
-    ("de", "독일어"), ("vi", "베트남어"), ("ms", "말레이어"), ("id", "인도네시아어"),
-    ("tl", "타갈로그어"), ("hi", "힌디어"), ("zh-Hant", "번체 중국어"), ("pl", "폴란드어"),
-    ("cs", "체코어"), ("nl", "네덜란드어"), ("km", "크메르어"), ("my", "미얀마어"),
-    ("fa", "페르시아어"), ("gu", "구자라트어"), ("ur", "우르두어"), ("te", "텔루구어"),
-    ("mr", "마라티어"), ("he", "히브리어"), ("bn", "벵골어"), ("ta", "타밀어"),
-    ("uk", "우크라이나어"), ("bo", "티베트어"), ("kk", "카자흐어"), ("mn", "몽골어"),
-    ("ug", "위구르어"), ("yue", "광둥어")
+    ("zh", "Chinese"), ("en", "English"), ("fr", "French"), ("pt", "Portuguese"),
+    ("es", "Spanish"), ("ja", "Japanese"), ("tr", "Turkish"), ("ru", "Russian"),
+    ("ar", "Arabic"), ("ko", "Korean"), ("th", "Thai"), ("it", "Italian"),
+    ("de", "German"), ("vi", "Vietnamese"), ("ms", "Malay"), ("id", "Indonesian"),
+    ("tl", "Tagalog"), ("hi", "Hindi"), ("zh-Hant", "Traditional Chinese"), ("pl", "Polish"),
+    ("cs", "Czech"), ("nl", "Dutch"), ("km", "Khmer"), ("my", "Burmese"),
+    ("fa", "Persian"), ("gu", "Gujarati"), ("ur", "Urdu"), ("te", "Telugu"),
+    ("mr", "Marathi"), ("he", "Hebrew"), ("bn", "Bengali"), ("ta", "Tamil"),
+    ("uk", "Ukrainian"), ("bo", "Tibetan"), ("kk", "Kazakh"), ("mn", "Mongolian"),
+    ("ug", "Uyghur"), ("yue", "Cantonese")
   ].map(TargetLanguage.init)
 }
 

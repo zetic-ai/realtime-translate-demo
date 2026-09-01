@@ -24,14 +24,14 @@ struct RealtimeTranslateRootView: View {
           ConversationView(viewModel: viewModel)
         }
       }
-      .navigationTitle("실시간 번역")
+      .navigationTitle("Realtime Translate")
     }
     .tint(DesignToken.primary)
   }
 
   private var errorReason: String {
     if case let .error(reason) = viewModel.state { return reason }
-    return "처리할 수 없습니다."
+    return "Unable to process the request."
   }
 }
 
@@ -42,11 +42,13 @@ private struct SetupView: View {
     Form {
       speakerSection(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA)
       speakerSection(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB)
-      Section("권한") {
-        Text("마이크와 음성 인식 권한, 선택 언어의 온디바이스 모델이 필요합니다.")
+      Section("Permissions") {
+        Text(
+          "Microphone and speech recognition permissions and an on-device model for the selected language are required."
+        )
           .foregroundStyle(DesignToken.textSecondary)
-        Button("마이크 권한 허용", action: viewModel.requestMicrophonePermission)
-        Button("앱 설정 열기", action: viewModel.openAppSettings)
+        Button("Allow Microphone Access", action: viewModel.requestMicrophonePermission)
+        Button("Open App Settings", action: viewModel.openAppSettings)
       }
     }
   }
@@ -54,12 +56,12 @@ private struct SetupView: View {
   @ViewBuilder private func speakerSection(
     _ speaker: Speaker, source: Binding<SpokenLanguage>, target: Binding<TargetLanguage>
   ) -> some View {
-    Section("\(speaker.rawValue) 설정") {
-      Picker("\(speaker.rawValue) 발화 언어", selection: source) {
+    Section("\(speaker.rawValue) Settings") {
+      Picker("\(speaker.rawValue) Spoken Language", selection: source) {
         ForEach(viewModel.availableSourceLanguages) { Text($0.rawValue).tag($0) }
       }
       .accessibilityIdentifier("source-language-\(speaker.rawValue)")
-      Picker("\(speaker.rawValue)가 읽을 번역 언어", selection: target) {
+      Picker("Translation Language for \(speaker.rawValue)", selection: target) {
         ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
       }
       .accessibilityIdentifier("target-language-\(speaker.rawValue)")
@@ -81,16 +83,16 @@ private struct ConversationView: View {
 
   private var controls: some View {
     VStack(spacing: 8) {
-      if case .error = viewModel.state { ErrorBanner(reason: "음성 인식을 다시 시도하거나 설정을 확인해 주세요.") }
+      if case .error = viewModel.state { ErrorBanner(reason: "Try speech recognition again or check Settings.") }
       if viewModel.state == .ended {
-        Button("새 세션 시작", action: viewModel.beginNewSession).buttonStyle(.borderedProminent)
+        Button("Start New Session", action: viewModel.beginNewSession).buttonStyle(.borderedProminent)
       } else {
         HStack(spacing: 12) {
           PTTButton(speaker: .a, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
           PTTButton(speaker: .b, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
         }
-        Button("세션 종료", action: viewModel.endSession)
-          .accessibilityLabel("세션 종료")
+        Button("End Session", action: viewModel.endSession)
+          .accessibilityLabel("End Session")
       }
     }
     .padding(16)
@@ -112,7 +114,7 @@ private struct PTTButton: View {
     }
   }
   private var label: String {
-    isListening ? "\(speaker.rawValue) 발화 종료" : "\(speaker.rawValue) 길게 눌러 말하기"
+    isListening ? "End \(speaker.rawValue) Turn" : "Hold to Talk as \(speaker.rawValue)"
   }
 
   var body: some View {
@@ -125,9 +127,9 @@ private struct PTTButton: View {
     .simultaneousGesture(LongPressGesture(minimumDuration: 0.15).onEnded { _ in
       if !isListening && !isBlocked { begin(speaker) }
     })
-    .accessibilityLabel(isListening ? "\(speaker.rawValue) 발화 종료" : "\(speaker.rawValue) 발화 시작")
+    .accessibilityLabel(isListening ? "End \(speaker.rawValue) Turn" : "Start \(speaker.rawValue) Turn")
     .accessibilityHint(
-      isBlocked ? "다른 발화 또는 번역 처리가 진행 중입니다." : "길게 눌러 말하거나 탭하여 시작하고 다시 탭하여 종료합니다."
+      isBlocked ? "Another turn or translation is in progress." : "Hold to talk, or tap once to start and again to end."
     )
   }
 }
@@ -146,11 +148,13 @@ private struct ConversationBubble: View {
   let item: ConversationItem
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
-      Text("\(item.speaker.rawValue) · \(item.targetLanguage.name)에게")
+      Text("\(item.speaker.rawValue) - To \(item.targetLanguage.name)")
         .font(.caption).foregroundStyle(DesignToken.textSecondary)
-      Text(item.transcript.isEmpty ? "듣는 중…" : item.transcript).font(.body).foregroundStyle(DesignToken.textPrimary)
+      Text(item.transcript.isEmpty ? "Listening..." : item.transcript)
+        .font(.body).foregroundStyle(DesignToken.textPrimary)
       switch item.state {
-      case .partial, .finalizing: Text("원문을 확정하는 중").font(.caption).foregroundStyle(DesignToken.textSecondary)
+      case .partial, .finalizing:
+        Text("Finalizing transcript").font(.caption).foregroundStyle(DesignToken.textSecondary)
       case .translated: if let translation = item.translation { Text(translation).foregroundStyle(DesignToken.primary) }
       case let .translationFailed(reason): Text(reason).font(.caption).foregroundStyle(DesignToken.error)
       }
@@ -170,9 +174,9 @@ private struct ErrorView: View {
   let retry: () -> Void
   var body: some View {
     VStack(spacing: 12) {
-      Label("처리할 수 없습니다", systemImage: "exclamationmark.triangle.fill")
+      Label("Unable to process the request", systemImage: "exclamationmark.triangle.fill")
       Text(reason).multilineTextAlignment(.center)
-      Button("다시 시도", action: retry)
+      Button("Try Again", action: retry)
     }.foregroundStyle(DesignToken.error).padding(16)
   }
 }
