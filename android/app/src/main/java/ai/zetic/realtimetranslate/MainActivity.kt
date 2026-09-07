@@ -5,19 +5,30 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-class MainActivity : ComponentActivity() {
+/**
+ * `AppCompatActivity` rather than `ComponentActivity`, for one reason: the drawer's `App language`
+ * row writes the platform's per-app locale, and below Android 13 the androidx backport can only
+ * store that choice and re-apply it through an AppCompat delegate. From Android 13 the framework's
+ * own `LocaleManager` does the work and this changes nothing.
+ */
+class MainActivity : AppCompatActivity() {
     private val viewModel: SessionViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before `super`, so the launch window is the app's own surface with the ZETIC lockup on it
+        // rather than a blank flash, and so the post-splash theme is in force by the time the
+        // activity reads it.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
@@ -34,8 +45,10 @@ class MainActivity : ComponentActivity() {
                 if (it) viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
             }
             val context = remember(this) { this }
+            val preferences = remember(this) { FirstRunPreferences(this) }
+            val appInfo = remember(this) { AppInfo.from(this) }
             RealtimeTranslateTheme {
-                RealtimeTranslateApp(
+                TurnTranslateRoot(
                     state = state,
                     onAction = { action ->
                         if (action == UiAction.RequestPermission) {
@@ -45,8 +58,20 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onOpenAppSettings = ::openAppSettings,
+                    onVisitWebsite = ::openWebsite,
+                    preferences = preferences,
+                    appInfo = appInfo,
+                    isMetered = { NetworkCost.isMetered(context) },
+                    hasPersonalKey = BuildConfig.MELANGE_PERSONAL_KEY.isNotEmpty(),
                 )
             }
+        }
+    }
+
+    /** The drawer's `Visit zetic.ai` row hands the URL to whatever browser the phone uses. */
+    private fun openWebsite() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SettingsDrawerCopy.WEBSITE)))
         }
     }
 

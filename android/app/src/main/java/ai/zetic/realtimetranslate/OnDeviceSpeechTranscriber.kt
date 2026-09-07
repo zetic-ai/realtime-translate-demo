@@ -23,12 +23,12 @@ interface SpeechTranscriptListener {
     fun onPartial(transcript: String)
     fun onFinal(transcript: String)
     fun onStopped()
-    fun onError(message: String)
+    fun onError(message: UiText)
 }
 
 sealed interface SpeechStartResult {
     data object Started : SpeechStartResult
-    data class Failed(val message: String) : SpeechStartResult
+    data class Failed(val message: UiText) : SpeechStartResult
 }
 
 /** Android's platform recognizer is used exclusively; online recognizer fallback is never created. */
@@ -44,7 +44,7 @@ class AndroidOnDeviceSpeechTranscriber(
 
     override fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            return SpeechStartResult.Failed("On-device speech recognition must start on the Android main thread.")
+            return SpeechStartResult.Failed(UiText.res(R.string.speech_error_main_thread))
         }
         OnDeviceRecognitionEligibility.failureFor(
             sdkInt = Build.VERSION.SDK_INT,
@@ -98,7 +98,7 @@ class AndroidOnDeviceSpeechTranscriber(
             if (stopping) {
                 activeListener?.onStopped()
             } else if (listening) {
-                activeListener?.onError("On-device speech recognition failed (error $error).")
+                activeListener?.onError(UiText.res(R.string.speech_error_recognition_failed, error))
             }
         }
         override fun onResults(results: android.os.Bundle?) {
@@ -128,7 +128,7 @@ interface SpeechLanguageCatalog {
     fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit)
 }
 
-data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: String? = null)
+data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: UiText? = null)
 
 object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
     override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
@@ -137,7 +137,7 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
             return
         }
         if (!AndroidOnDeviceSpeechRecognizerPlatform.isOnDeviceRecognitionAvailable(context)) {
-            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), "This device has no on-device speech recognizer."))
+            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), UiText.res(R.string.speech_catalog_no_recognizer)))
             return
         }
         val recognizer = AndroidOnDeviceSpeechRecognizerPlatform.createOnDeviceSpeechRecognizer(context)
@@ -152,7 +152,7 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
                 }
                 override fun onError(error: Int) {
                     recognizer.destroy()
-                    onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), "Installed on-device language list is unavailable (error $error)."))
+                    onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), UiText.res(R.string.speech_catalog_unavailable, error)))
                 }
             },
         )
@@ -161,12 +161,65 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
 }
 
 object SpeechLanguageCatalogMapping {
-    fun installed(tags: List<String>): List<SpeechLanguage.Installed> = tags.map(::installedLanguage).distinctBy { it.languageTag }.sortedBy { it.displayName }
+    /**
+     * The spoken-language names come from the platform, which already localizes them, so the list
+     * is built in the app's current language rather than pinned to English. [displayLocale] is a
+     * parameter so the ordering and the names are deterministic in a unit test.
+     */
+    fun installed(tags: List<String>, displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage.Installed> =
+        tags.map { installedLanguage(it, displayLocale) }.distinctBy { it.languageTag }.sortedBy { it.name }
 
-    private fun installedLanguage(tag: String): SpeechLanguage.Installed {
+    private fun installedLanguage(tag: String, displayLocale: Locale): SpeechLanguage.Installed {
         val locale = Locale.forLanguageTag(tag)
-        return SpeechLanguage.Installed(tag, locale.getDisplayName(Locale.ENGLISH).ifBlank { tag })
+        return SpeechLanguage.Installed(tag, locale.getDisplayName(displayLocale).ifBlank { tag })
     }
+}
+
+/**
+ * The installed recognizer language matching a reading language: same primary language subtag,
+ * preferring the variant that code most likely implies (`fr` picks `fr-FR` over `fr-BE`, `zh-Hant`
+ * picks `zh-TW`). A language with no installed recognizer has no match, and the caller leaves the
+ * spoken language alone.
+ */
+object SpokenLanguageMatching {
+    fun match(reading: TranslationLanguage, available: List<SpeechLanguage>): SpeechLanguage.Installed? {
+        val primary = primarySubtag(reading.code) ?: return null
+        val matches = available.filterIsInstance<SpeechLanguage.Installed>()
+            .filter { primarySubtag(it.languageTag) == primary }
+        if (matches.size <= 1) return matches.firstOrNull()
+        val implied = variantSubtags(reading.code) + likelyVariants.getOrElse(reading.code) { emptySet() }
+        return matches.firstOrNull { candidate ->
+            variantSubtags(candidate.languageTag).any(implied::contains)
+        } ?: matches.first()
+    }
+
+    private fun primarySubtag(tag: String): String? =
+        Locale.forLanguageTag(tag).language.takeIf { it.isNotEmpty() }
+
+    /** Everything after the primary subtag, upper-cased so `Hant` and `HANT` compare equal. */
+    private fun variantSubtags(tag: String): Set<String> =
+        tag.split('-', '_').drop(1).filter(String::isNotEmpty).map { it.uppercase(Locale.ROOT) }.toSet()
+
+    /**
+     * The variant a bare reading code implies, for the Hy-MT2 languages a device plausibly carries
+     * more than one recognizer for. Everything else resolves on the primary subtag alone.
+     */
+    private val likelyVariants = mapOf(
+        "ar" to setOf("SA"),
+        "bn" to setOf("BD"),
+        "de" to setOf("DE"),
+        "en" to setOf("US"),
+        "es" to setOf("ES"),
+        "fr" to setOf("FR"),
+        "it" to setOf("IT"),
+        "ms" to setOf("MY"),
+        "nl" to setOf("NL"),
+        "pt" to setOf("BR"),
+        "ta" to setOf("IN"),
+        "ur" to setOf("PK"),
+        "zh" to setOf("CN", "HANS"),
+        "zh-Hant" to setOf("TW", "HANT"),
+    )
 }
 
 interface OnDeviceSpeechRecognizerPlatform {
@@ -184,10 +237,10 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
 }
 
 object OnDeviceRecognitionEligibility {
-    fun failureFor(sdkInt: Int, hasRecordAudioPermission: Boolean, isOnDeviceRecognizerAvailable: Boolean): String? = when {
-        sdkInt < Build.VERSION_CODES.S -> "This device requires Android 12 (API 31) or later for on-device speech recognition."
-        !hasRecordAudioPermission -> "Microphone permission is required."
-        !isOnDeviceRecognizerAvailable -> "This device has no on-device speech recognizer. The app will not fall back to online recognition."
+    fun failureFor(sdkInt: Int, hasRecordAudioPermission: Boolean, isOnDeviceRecognizerAvailable: Boolean): UiText? = when {
+        sdkInt < Build.VERSION_CODES.S -> UiText.res(R.string.speech_error_android_version)
+        !hasRecordAudioPermission -> UiText.res(R.string.speech_error_permission)
+        !isOnDeviceRecognizerAvailable -> UiText.res(R.string.speech_error_no_recognizer)
         else -> null
     }
 }

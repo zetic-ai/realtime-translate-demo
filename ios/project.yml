@@ -5,19 +5,18 @@ packages:
     exactVersion: 1.10.0
 options:
   minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
 settings:
   base:
     SWIFT_VERSION: 5.0
-    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    # ZeticMLange 1.10.0 is built for iOS 16.6 or later.
+    IPHONEOS_DEPLOYMENT_TARGET: 16.6
     PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.realtimetranslate
 targets:
   RealtimeTranslate:
     type: application
     platform: iOS
     sources: [Sources]
-    configFiles:
-      Debug: Config/Melange.xcconfig
-      Release: Config/Melange.xcconfig
     dependencies:
       - package: ZeticMLangeiOS
         product: ZeticMLange
@@ -27,7 +26,14 @@ targets:
         INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_NAME: RealtimeTranslate
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "1,2"
+        # iPhone only. "1,2" shipped an iPad build of a layout that was never drawn for one, with
+        # a bottom bar and a 280 point drawer stretched across a 13 inch screen and copy that says
+        # "on this phone" throughout. Raise it to "1,2" when there is an iPad layout to ship.
+        TARGETED_DEVICE_FAMILY: "1"
+        # Sources/Localizable.xcstrings is the one catalog. Both flags together are what makes a
+        # build extract literals and `String(localized:)` calls into it.
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
     scheme:
       testTargets:
         - RealtimeTranslateTests

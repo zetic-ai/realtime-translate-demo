@@ -2,6 +2,7 @@ package ai.zetic.realtimetranslate
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -46,12 +47,34 @@ class RealtimeTranslateAppTest {
         assertEquals(UiAction.TogglePtt(Speaker.A), action)
     }
 
-    @Test fun finalCardDisplaysSpeakerTargetAndTranslationError() {
-        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = "Hy-MT2 runtime verification is incomplete.")))
+    @Test fun finalBubbleDisplaysSpeakerTargetAndTranslationError() {
+        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = UiText.raw("Hy-MT2 runtime verification is incomplete."))))
         setApp(state)
-        composeRule.onNodeWithText("B - Automatic (device recognizer)").assertIsDisplayed()
-        composeRule.onNodeWithText("For English").assertIsDisplayed()
+        composeRule.onNodeWithText("Speaker B").assertIsDisplayed()
+        composeRule.onNodeWithText("To A - English").assertIsDisplayed()
         composeRule.onNodeWithText("Hy-MT2 runtime verification is incomplete.").assertIsDisplayed()
+    }
+
+    @Test fun chatBubblesAlignLeftForAAndRightForB() {
+        setApp(
+            readyConversationState().copy(
+                conversations = listOf(
+                    item(Speaker.A, "left side", true).copy(id = "a"),
+                    item(Speaker.B, "right side", true).copy(id = "b"),
+                ),
+            ),
+        )
+
+        val a = composeRule.onNodeWithContentDescription("Speaker A utterance").fetchSemanticsNode().boundsInRoot
+        val b = composeRule.onNodeWithContentDescription("Speaker B utterance").fetchSemanticsNode().boundsInRoot
+
+        assertTrue(a.left < b.left)
+        assertTrue(a.right < b.right)
+    }
+
+    @Test fun queuedBubbleAnnouncesTranslationPending() {
+        setApp(readyConversationState().copy(conversations = listOf(item(Speaker.A, "hello", true))))
+        composeRule.onNodeWithText("Translation pending").assertIsDisplayed()
     }
 
     @Test fun conversationCardsScrollWithoutMovingSessionControls() {
@@ -86,10 +109,91 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Newest appended card:", substring = true).assertIsDisplayed()
     }
 
-    @Test fun settingsProvideSeparateLanguagePickersForBothSpeakers() {
+    @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithContentDescription("Speaker A recognition language selector: Automatic (device recognizer)").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Speaker B translation language selector: English").assertIsDisplayed()
+        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("ZETIC").assertIsDisplayed()
+
+        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
+        val wordmark = composeRule.onNodeWithContentDescription("ZETIC").fetchSemanticsNode().boundsInRoot
+        assertTrue(title.left < wordmark.left)
+    }
+
+    @Test fun topLanguageBarShowsOneChipPerSpeakerMirroringBubbleSides() {
+        setApp(SessionUiState(SessionPhase.Ready))
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsEnabled()
+        composeRule.onNodeWithText("A · English").assertIsDisplayed()
+        composeRule.onNodeWithText("B · Korean").assertIsDisplayed()
+
+        val a = composeRule.onNodeWithContentDescription(CHIP_A).fetchSemanticsNode().boundsInRoot
+        val b = composeRule.onNodeWithContentDescription(CHIP_B).fetchSemanticsNode().boundsInRoot
+        assertTrue(a.left < b.left)
+    }
+
+    @Test fun speakerChipMenuOffersReadingAndSpokenSections() {
+        var action: UiAction? = null
+        setApp(SessionUiState(SessionPhase.Ready), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Reading language").assertExists()
+        composeRule.onNodeWithText("Spoken language").assertExists()
+        composeRule.onNodeWithText("Automatic (device recognizer)").assertExists()
+        composeRule.onNodeWithText("French").performClick()
+
+        assertEquals(UiAction.SelectReading(Speaker.A, HyMt2Languages.all.first { it.code == "fr" }), action)
+    }
+
+    @Test fun bottomBarHoldsOnlyThePushToTalkControlsAndSessionAction() {
+        setApp(readyConversationState())
+        composeRule.onNodeWithContentDescription("Start speaker A").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Start speaker B").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("End session").assertIsEnabled()
+        composeRule.onNodeWithText("Speaks").assertDoesNotExist()
+        composeRule.onNodeWithText("Reads").assertDoesNotExist()
+    }
+
+    @Test fun idleMainScreenStartsInOneTapAndKeepsPushToTalkLocked() {
+        setApp(SessionUiState(SessionPhase.Ready))
+        composeRule.onNodeWithContentDescription("Start conversation").assertIsEnabled()
+        composeRule.onNodeWithText("Tap Start conversation to load the translation model.").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("Speaker B push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun errorStateDefersTheBottomHintToTheBanner() {
+        setApp(readyConversationState().copy(phase = SessionPhase.Error, errorMessage = UiText.raw("Speech recognition failed.")))
+        composeRule.onNodeWithText("Speech recognition failed.").assertIsDisplayed()
+        composeRule.onNodeWithText("Resolve the error above to continue.").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Try again").assertIsEnabled()
+    }
+
+    @Test fun modelLoadingRendersInlineAndLocksLanguageChips() {
+        setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f))
+        composeRule.onNodeWithText("Loading translation model 50%").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun modelLoadFailureOffersInlineRetryOnTheMainScreen() {
+        var action: UiAction? = null
+        setApp(SessionUiState(SessionPhase.ModelLoadFailed, errorMessage = UiText.raw("offline")), onAction = { action = it })
+        composeRule.onNodeWithText("offline").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Retry model load").performClick()
+        assertEquals(UiAction.Retry, action)
+    }
+
+    @Test fun languageChipsAreLockedWhileAnUtteranceIsActive() {
+        setApp(readyConversationState().copy(phase = SessionPhase.TranslatingA))
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
+    }
+
+    @Test fun liveSessionKeepsLanguageChipsEditable() {
+        setApp(readyConversationState())
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsEnabled()
     }
 
     @Test fun recognitionIntentUsesOfflineSettingsAndExplicitLanguage() {
@@ -140,6 +244,11 @@ class RealtimeTranslateAppTest {
 
     private fun setApp(state: SessionUiState, onAction: (UiAction) -> Unit = {}, onOpenAppSettings: () -> Unit = {}) {
         composeRule.setContent { RealtimeTranslateTheme { RealtimeTranslateApp(state, onAction, onOpenAppSettings) } }
+    }
+
+    private companion object {
+        const val CHIP_A = "Speaker A languages: reads English, speaks Automatic"
+        const val CHIP_B = "Speaker B languages: reads Korean, speaks Automatic"
     }
 
     private fun readyConversationState() = SessionUiState(SessionPhase.Ready, conversationStarted = true)

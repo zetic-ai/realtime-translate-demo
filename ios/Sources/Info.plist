@@ -12,6 +12,12 @@
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>fr</string>
+        <string>es</string>
+    </array>
     <key>CFBundleName</key>
     <string>$(PRODUCT_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -28,13 +34,20 @@
     <string>Microphone access is required to listen and translate conversations in real time.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Speech recognition is required to transcribe conversations on this device.</string>
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
     </dict>
     <key>UILaunchScreen</key>
-    <dict/>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+        <key>UIImageName</key>
+        <string>LaunchLogo</string>
+    </dict>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>

@@ -15,6 +15,7 @@ sealed interface SessionAction {
     data class ReadingLanguageChanged(val speaker: Speaker, val language: TranslationLanguage) : SessionAction
     data class StartConversation(val context: Context) : SessionAction
     data object EndSession : SessionAction
+    data object ClearConversation : SessionAction
     data class PttPress(val context: Context, val speaker: Speaker) : SessionAction
     data class PttRelease(val speaker: Speaker) : SessionAction
     data class TogglePtt(val context: Context, val speaker: Speaker) : SessionAction
@@ -40,9 +41,12 @@ class SessionViewModel(
         )
         is SessionAction.RefreshSpeechLanguages -> refreshSpeechLanguages(action.context)
         is SessionAction.InputLanguageChanged -> updateSettings(action.speaker) { it.copy(inputLanguage = action.language) }
-        is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) { it.copy(readingLanguage = action.language) }
+        is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) {
+            alignInputLanguage(it.copy(readingLanguage = action.language), mutableState.value.speechLanguages)
+        }
         is SessionAction.StartConversation -> loadModel(action.context)
         SessionAction.EndSession -> endSession()
+        SessionAction.ClearConversation -> clearConversation()
         is SessionAction.PttPress -> start(action.context, action.speaker)
         is SessionAction.PttRelease -> stop(action.speaker)
         is SessionAction.TogglePtt -> toggle(action.context, action.speaker)
@@ -54,12 +58,29 @@ class SessionViewModel(
         mutableState.value = current.copy(settings = current.settings + (speaker to transform(current.settingsFor(speaker))))
     }
 
+    /**
+     * A speaker's chip language drives what the recognizer listens for, so a speaker shown as
+     * Korean is listened to in Korean. A reading language with no installed recognizer leaves the
+     * spoken language exactly as it was.
+     */
+    private fun alignInputLanguage(settings: SpeakerSettings, languages: List<SpeechLanguage>): SpeakerSettings {
+        val match = SpokenLanguageMatching.match(settings.readingLanguage, languages) ?: return settings
+        return settings.copy(inputLanguage = match)
+    }
+
     private fun refreshSpeechLanguages(context: Context) {
         if (mutableState.value.conversationStarted || mutableState.value.speechLanguageCatalogLoading) return
         mutableState.value = mutableState.value.copy(speechLanguageCatalogLoading = true, speechLanguageCatalogMessage = null)
         speechLanguageCatalog.load(context.applicationContext) { result ->
             val validLanguages = result.languages.ifEmpty { listOf(SpeechLanguage.Automatic) }
-            mutableState.value = mutableState.value.copy(speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
+            val current = mutableState.value
+            // The catalog arriving is the first moment a spoken language can be derived at all, so
+            // it stands in for init here. A speaker who has explicitly picked a spoken language is
+            // left alone; that override survives until their reading language changes again.
+            val aligned = current.settings.mapValues { (_, settings) ->
+                if (settings.inputLanguage == SpeechLanguage.Automatic) alignInputLanguage(settings, validLanguages) else settings
+            }
+            mutableState.value = current.copy(settings = aligned, speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
         }
     }
 
@@ -76,7 +97,7 @@ class SessionViewModel(
             }.onSuccess {
                 mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = true, modelLoadProgress = 1f)
             }.onFailure { error ->
-                mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.message ?: "The translation model could not be loaded.")
+                mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.asUiText(R.string.error_model_load_failed))
             }
         }
     }
@@ -115,7 +136,7 @@ class SessionViewModel(
             owner.destroy()
             finalize(speaker, owner)
         }
-        override fun onError(message: String) = fail(message, owner)
+        override fun onError(message: UiText) = fail(message, owner)
     }
 
     private fun updateTranscript(speaker: Speaker, transcript: String, isFinal: Boolean, owner: SpeechTranscriber) {
@@ -151,35 +172,48 @@ class SessionViewModel(
         viewModelScope.launch {
             runCatching { translator.translate(prompt) }
                 .onSuccess { completeTranslation(item.id, it) }
-                .onFailure { failTranslation(item.id, it.message ?: "Translation failed.") }
+                .onFailure { failTranslation(item.id, it.asUiText(R.string.error_translation_failed)) }
         }
     }
 
     private fun completeTranslation(id: String, translation: String) {
         val current = mutableState.value
-        if (!current.conversationStarted || current.phase == SessionPhase.EndingSession) return
+        if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, translationError = null) else it })
     }
-    private fun failTranslation(id: String, message: String) {
+    private fun failTranslation(id: String, message: UiText) {
         val current = mutableState.value
-        if (!current.conversationStarted || current.phase == SessionPhase.EndingSession) return
+        if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translationError = message) else it })
     }
-    private fun fail(message: String, owner: SpeechTranscriber? = transcriber) {
-        if (owner !== transcriber || mutableState.value.phase == SessionPhase.EndingSession) return
+    private fun fail(message: UiText, owner: SpeechTranscriber? = transcriber) {
+        if (owner !== transcriber || !mutableState.value.conversationStarted) return
         owner?.destroy(); transcriber = null
         mutableState.value = mutableState.value.copy(phase = SessionPhase.Error, errorMessage = message)
     }
+    /**
+     * Ending a session stops recognition and clears the conversation but keeps the model resident,
+     * so the next Start conversation reaches Ready without loading again. The model is released in
+     * [onCleared], when the view model itself goes away.
+     */
     private fun endSession() {
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.EndingSession, errorMessage = null)
         val activeTranscriber = transcriber
         transcriber = null
         activeTranscriber?.destroy()
-        viewModelScope.launch {
-            runCatching { translator.unload() }
-            mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
-        }
+        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
     }
+    /**
+     * Empties the transcript without ending the session: the model stays resident, both language
+     * chips stay as they are, the session phase is untouched, and the next turn starts straight
+     * away. Guarded by the same rule the drawer row is disabled under, so a late tap on a row that
+     * has just become unavailable cannot strand an in-flight bubble.
+     */
+    private fun clearConversation() {
+        val current = mutableState.value
+        if (!current.canClearConversation) return
+        mutableState.value = current.copy(conversations = emptyList())
+    }
+
     private fun retry() {
         val current = mutableState.value
         when {
@@ -191,6 +225,14 @@ class SessionViewModel(
     }
     override fun onCleared() { transcriber?.destroy(); transcriber = null; translator.close() }
 }
+
+/**
+ * The sentence a failure shows. A [TranslationFailure] already carries its own, and anything else
+ * is a runtime or SDK error this app did not write and cannot translate, so its message is passed
+ * through as-is and the generic line stands in when there is none.
+ */
+private fun Throwable.asUiText(fallback: Int): UiText =
+    (this as? TranslationFailure)?.text ?: message?.takeIf { it.isNotBlank() }?.let(UiText::raw) ?: UiText.res(fallback)
 
 private fun listeningPhase(speaker: Speaker) = if (speaker == Speaker.A) SessionPhase.ListeningA else SessionPhase.ListeningB
 private fun finalizingPhase(speaker: Speaker) = if (speaker == Speaker.A) SessionPhase.FinalizingA else SessionPhase.FinalizingB
