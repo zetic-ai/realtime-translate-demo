@@ -1376,7 +1376,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(info.versionLine, "Version 1.2 (7)")
     XCTAssertEqual(AppInfo(info: ["CFBundleName": "RealtimeTranslate"]).displayName, "RealtimeTranslate")
     XCTAssertEqual(AppInfo(info: nil).displayName, "Turn Translate")
-    XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Turn Translate")
+    XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Zetic Relay")
   }
 
   // MARK: - First run

@@ -52,32 +52,32 @@ class FirstRunTest {
     @Test fun `a first start with no model on this phone asks first`() {
         assertEquals(
             ModelDownloadConsent.Decision.Ask(cellularWarning = false),
-            ModelDownloadConsent.decision(hasLocalModel = false, isMetered = false),
+            ModelDownloadConsent.decision(hasDownloadConsent = false, isMetered = false),
         )
     }
 
     @Test fun `a metered network adds the Wi-Fi warning to the same card`() {
         assertEquals(
             ModelDownloadConsent.Decision.Ask(cellularWarning = true),
-            ModelDownloadConsent.decision(hasLocalModel = false, isMetered = true),
+            ModelDownloadConsent.decision(hasDownloadConsent = false, isMetered = true),
         )
     }
 
     @Test fun `a model already on this phone starts straight away, metered or not`() {
         assertEquals(
             ModelDownloadConsent.Decision.StartImmediately,
-            ModelDownloadConsent.decision(hasLocalModel = true, isMetered = false),
+            ModelDownloadConsent.decision(hasDownloadConsent = true, isMetered = false),
         )
         assertEquals(
             ModelDownloadConsent.Decision.StartImmediately,
-            ModelDownloadConsent.decision(hasLocalModel = true, isMetered = true),
+            ModelDownloadConsent.decision(hasDownloadConsent = true, isMetered = true),
         )
     }
 
     @Test fun `a build with no personal key never offers a download it cannot make`() {
         assertEquals(
             ModelDownloadConsent.Decision.StartImmediately,
-            ModelDownloadConsent.decision(hasLocalModel = false, isMetered = true, hasPersonalKey = false),
+            ModelDownloadConsent.decision(hasDownloadConsent = false, isMetered = true, hasPersonalKey = false),
         )
     }
 
@@ -89,7 +89,7 @@ class FirstRunTest {
     // file used to list, and lives in LocalizationCatalogTest, which reads the catalog off disk.
 
     @Test fun `the words the app never translates stay constants rather than catalog entries`() {
-        assertEquals("Turn Translate", FirstRunCopy.PRODUCT_NAME)
+        assertEquals("Zetic Relay", FirstRunCopy.PRODUCT_NAME)
         assertEquals("contact@zetic.ai", SettingsDrawerCopy.CONTACT_EMAIL)
         assertEquals("https://zetic.ai", SettingsDrawerCopy.WEBSITE)
     }
@@ -108,7 +108,7 @@ class FirstRunTest {
     @Test fun `the About block reads the version pair as one terse line`() {
         assertEquals(
             UiText.res(R.string.about_version_line, "0.1.0", "1"),
-            AppInfo("Turn Translate", "0.1.0", "1").versionLine,
+            AppInfo("Zetic Relay", "0.1.0", "1").versionLine,
         )
     }
 

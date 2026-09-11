@@ -10,7 +10,7 @@ import androidx.compose.ui.platform.LocalContext
  * A string a person reads, carried as what it is rather than as text.
  *
  * Composables can call `stringResource` directly, but the view model, the recognizer, and the
- * translation runtime all produce text long before a composition exists, and Turn Translate can be
+ * translation runtime all produce text long before a composition exists, and Zetic Relay can be
  * put into a language of its own at any moment. Resolving those strings where they are built would
  * freeze them in the language that was in force when the session started. Carrying the resource id
  * instead defers every resolution to the frame that draws it, so a language change repaints the

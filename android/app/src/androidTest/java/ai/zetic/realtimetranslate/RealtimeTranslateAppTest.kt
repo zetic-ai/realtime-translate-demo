@@ -111,10 +111,10 @@ class RealtimeTranslateAppTest {
 
     @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
+        composeRule.onNodeWithText("Zetic Relay").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("ZETIC").assertIsDisplayed()
 
-        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
+        val title = composeRule.onNodeWithText("Zetic Relay").fetchSemanticsNode().boundsInRoot
         val wordmark = composeRule.onNodeWithContentDescription("ZETIC").fetchSemanticsNode().boundsInRoot
         assertTrue(title.left < wordmark.left)
     }

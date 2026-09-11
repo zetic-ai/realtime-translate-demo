@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Every user-facing string in Turn Translate. The product name Turn
-     Translate, the brand ZETIC, the domain zetic.ai, the model name Hy-MT2, the
+<!-- Every user-facing string in Zetic Relay. The product name Zetic Relay, the brand ZETIC, the
+     domain zetic.ai, the model name Hy-MT2, the
      speaker labels A and B, the three app-language names and the 38 Hy-MT2
      reading-language names are constants in code, so nothing can translate them
      by accident. No value in any language contains an em dash or an en dash. -->
 <resources>
 
     <!-- The product name, the brand and the address are constants in code, not here. -->
-    <string name="app_name">Turn Translate</string>
+    <string name="app_name">Zetic Relay</string>
 
     <!-- Status strip -->
     <string name="status_permission_required">Microphone permission required</string>
     <string name="status_preparing_model">Preparing translation model</string>
+    <string name="status_model_download_in_progress">Model download in progress</string>
     <string name="status_model_unavailable">Translation model unavailable</string>
     <string name="status_conversation_ready">Conversation ready</string>
     <string name="status_ready_to_start">Ready to start</string>
@@ -30,13 +31,17 @@
     <string name="menu_spoken_language">Spoken language</string>
 
     <!-- Session banner -->
-    <string name="banner_permission_body">Turn Translate needs microphone access to recognize speech on this device.</string>
+    <string name="banner_permission_body">Zetic Relay needs microphone access to recognize speech on this device.</string>
     <string name="banner_open_app_settings">Open app settings</string>
     <string name="banner_allow_microphone">Allow microphone</string>
     <string name="banner_request_permission_accessibility">Request microphone permission</string>
     <string name="banner_loading_model">Loading translation model %1$d%%</string>
     <string name="banner_controls_unlock">Speaker controls unlock when the model is ready.</string>
     <string name="banner_retry_model_load">Retry model load</string>
+    <string name="banner_model_download_in_progress">Model download in progress %1$d%%</string>
+    <string name="banner_model_download_wait">Translation starts once the download is complete.</string>
+    <string name="banner_model_download_failed">The model download could not be completed.</string>
+    <string name="banner_retry_model_download">Retry model download</string>
     <string name="banner_try_again">Try again</string>
 
     <!-- Transcript -->
@@ -53,6 +58,7 @@
     <!-- Bottom bar -->
     <string name="hint_grant_microphone">Grant microphone access to enable push-to-talk.</string>
     <string name="hint_model_not_ready">Push-to-talk unlocks once the translation model is ready.</string>
+    <string name="hint_model_download_in_progress">Model download in progress. Translation will be ready when it finishes.</string>
     <string name="hint_resolve_error">Resolve the error above to continue.</string>
     <string name="hint_start_conversation">Tap Start conversation to load the translation model.</string>
     <string name="hint_other_speaker_active">Speaker %1$s cannot begin while speaker %2$s is active.</string>
@@ -81,6 +87,14 @@
     <string name="settings_clear_subtitle">Keeps the session and the languages</string>
     <string name="settings_clear_accessibility_available">%1$s, keeps the session and the languages</string>
     <string name="settings_clear_accessibility_unavailable">%1$s, unavailable, there is nothing to clear</string>
+    <string name="settings_remove_model_title">Remove downloaded model</string>
+    <string name="settings_remove_model_subtitle">Downloading it again will require your consent</string>
+    <string name="settings_remove_model_unavailable">Finish the active translation first</string>
+    <string name="settings_remove_model_accessibility_available">%1$s, downloading it again will require your consent</string>
+    <string name="settings_remove_model_accessibility_unavailable">%1$s, unavailable. Finish the active translation first</string>
+    <string name="settings_remove_model_confirm_title">Remove downloaded model?</string>
+    <string name="settings_remove_model_confirm_body">The translation model will be removed from this phone. Your conversations and settings will stay here.</string>
+    <string name="settings_remove_model_confirm_action">Remove model</string>
     <string name="toast_conversation_cleared">Conversation cleared</string>
     <string name="settings_app_language_title">App language</string>
     <string name="settings_app_language_accessibility">App language, %1$s</string>
@@ -129,4 +143,7 @@
     <string name="error_model_stopped">The translation model stopped unexpectedly.</string>
     <string name="error_model_empty_result">The translation model returned an empty result.</string>
     <string name="error_translation_failed">Translation failed.</string>
+    <string name="model_removal_complete">Downloaded model removed</string>
+    <string name="model_removal_in_use">Finish the active translation before removing the model.</string>
+    <string name="model_removal_failed">The downloaded model could not be removed.</string>
 </resources>

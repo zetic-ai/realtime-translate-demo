@@ -181,6 +181,9 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
       name: Self.modelName,
       version: nil,
       modelMode: .RUN_AUTO,
+      // A completed background job owns the SDK cache. Keep it intact while the foreground model
+      // initializes, rather than letting the initializer replace or discard its artifacts.
+      cacheHandlingPolicy: .KEEP_EXISTING,
       onDownload: { progress in onProgress(Double(progress)) }
     )
   }

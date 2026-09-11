@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
@@ -93,7 +94,7 @@ fun TurnTranslateRoot(
     var welcomeSeen by remember { mutableStateOf(preferences.welcomeSeen) }
     var primingSeen by remember { mutableStateOf(preferences.permissionPrimingSeen) }
     var consent by remember { mutableStateOf<ConsentPrompt?>(null) }
-    var pendingStart by remember { mutableStateOf<UiAction?>(null) }
+    var modelRemovalConfirmation by remember { mutableStateOf(false) }
     // Seeded from the stored preference rather than defaulted, so a launch that starts muted never
     // speaks before the screen appears.
     var isMuted by remember { mutableStateOf(preferences.speechMuted) }
@@ -120,14 +121,13 @@ fun TurnTranslateRoot(
     fun requestSessionStart(action: UiAction) {
         when (
             val decision = ModelDownloadConsent.decision(
-                hasLocalModel = preferences.hasEverLoadedModel,
+                hasDownloadConsent = preferences.modelDownloadConsent,
                 isMetered = isMetered(),
                 hasPersonalKey = hasPersonalKey,
             )
         ) {
             ModelDownloadConsent.Decision.StartImmediately -> onAction(action)
             is ModelDownloadConsent.Decision.Ask -> {
-                pendingStart = action
                 consent = ConsentPrompt(decision.cellularWarning)
             }
         }
@@ -199,6 +199,7 @@ fun TurnTranslateRoot(
                                 SettingsDrawerContent(
                                     appInfo = appInfo,
                                     canClearConversation = state.canClearConversation,
+                                    canRemoveDownloadedModel = state.canRemoveDownloadedModel,
                                     appLanguage = appLanguage,
                                     onClearConversation = {
                                         // The sentence being spoken belongs to a bubble that is
@@ -207,6 +208,10 @@ fun TurnTranslateRoot(
                                         onAction(UiAction.ClearConversation)
                                         scope.launch { drawerState.close() }
                                         drawerToast.show(clearedToast)
+                                    },
+                                    onRemoveDownloadedModel = {
+                                        modelRemovalConfirmation = true
+                                        scope.launch { drawerState.close() }
                                     },
                                     onSelectAppLanguage = ::selectAppLanguage,
                                     onVisitWebsite = onVisitWebsite,
@@ -258,19 +263,37 @@ fun TurnTranslateRoot(
                 ModelConsentCard(
                     prompt = prompt,
                     onDownload = {
-                        val start = pendingStart
-                        pendingStart = null
                         consent = null
-                        start?.let(onAction)
+                        onAction(UiAction.ScheduleModelDownload)
                     },
                     // Declining remembers nothing: the next start asks again, which is also how the
                     // Wi-Fi warning gets a second chance to appear.
                     onDismiss = {
-                        pendingStart = null
                         consent = null
                     },
                 )
             }
+        }
+
+        if (modelRemovalConfirmation) {
+            AlertDialog(
+                onDismissRequest = { modelRemovalConfirmation = false },
+                title = { Text(stringResource(R.string.settings_remove_model_confirm_title)) },
+                text = { Text(stringResource(R.string.settings_remove_model_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            modelRemovalConfirmation = false
+                            onAction(UiAction.RemoveDownloadedModel)
+                        },
+                    ) { Text(stringResource(R.string.settings_remove_model_confirm_action)) }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { modelRemovalConfirmation = false }) {
+                        Text(stringResource(R.string.first_run_decline))
+                    }
+                },
+            )
         }
 
         ToastHost(drawerToast, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeContent))

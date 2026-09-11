@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 
 /**
- * Everything the first run of Turn Translate needs to decide what to show and when: the remembered
+ * Everything the first run of Zetic Relay needs to decide what to show and when: the remembered
  * flags, the step they imply, the model-download consent decision, and the copy the first-run
  * surfaces render. Kept out of the composables so every decision is testable without UI.
  *
@@ -47,6 +47,20 @@ class FirstRunPreferences(context: Context) {
         set(value) = preferences.edit().putBoolean(MODEL_LOADED_KEY, value).apply()
 
     /**
+     * A successful load in a prior version is evidence that the person already approved this
+     * download. New installs must make the explicit decision before scheduling anything.
+     */
+    var modelDownloadConsent: Boolean
+        get() = preferences.getBoolean(MODEL_DOWNLOAD_CONSENT_KEY, hasEverLoadedModel)
+        set(value) = preferences.edit().putBoolean(MODEL_DOWNLOAD_CONSENT_KEY, value).apply()
+
+    var backgroundDownloadHandleId: String?
+        get() = preferences.getString(BACKGROUND_DOWNLOAD_HANDLE_KEY, null)
+        set(value) = preferences.edit().apply {
+            if (value == null) remove(BACKGROUND_DOWNLOAD_HANDLE_KEY) else putString(BACKGROUND_DOWNLOAD_HANDLE_KEY, value)
+        }.apply()
+
+    /**
      * Whether spoken translation is off. Default is sound on, and the key is spelled exactly as the
      * iOS `@AppStorage` key. Read on the first frame rather than after it, so a launch that starts
      * muted never speaks before the screen appears.
@@ -63,6 +77,8 @@ class FirstRunPreferences(context: Context) {
         const val WELCOME_SEEN_KEY = "firstRun.welcomeSeen"
         const val PRIMING_SEEN_KEY = "firstRun.permissionPrimingSeen"
         const val MODEL_LOADED_KEY = "model.hasEverLoaded"
+        const val MODEL_DOWNLOAD_CONSENT_KEY = "model.downloadConsent"
+        const val BACKGROUND_DOWNLOAD_HANDLE_KEY = "model.backgroundDownloadHandle"
         const val SPEECH_MUTED_KEY = "speech.muted"
     }
 }
@@ -124,8 +140,8 @@ object ModelDownloadConsent {
      * instead, and the load reports that failure where every other model failure is reported: the
      * session banner, with its retry.
      */
-    fun decision(hasLocalModel: Boolean, isMetered: Boolean, hasPersonalKey: Boolean = true): Decision =
-        if (hasLocalModel || !hasPersonalKey) Decision.StartImmediately else Decision.Ask(isMetered)
+    fun decision(hasDownloadConsent: Boolean, isMetered: Boolean, hasPersonalKey: Boolean = true): Decision =
+        if (hasDownloadConsent || !hasPersonalKey) Decision.StartImmediately else Decision.Ask(isMetered)
 }
 
 // endregion
@@ -138,7 +154,7 @@ object ModelDownloadConsent {
  * surfaces as a resource, so the French and Spanish passes cover them without touching this file.
  */
 object FirstRunCopy {
-    const val PRODUCT_NAME = "Turn Translate"
+    const val PRODUCT_NAME = "Zetic Relay"
 }
 
 /** The consent card's one composed sentence: a translated frame around a hedged, formatted size. */

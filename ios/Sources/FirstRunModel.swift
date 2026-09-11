@@ -255,8 +255,8 @@ enum FirstRunCopy {
            comment: "Consent card body text. %@ is a formatted size such as 1.91 GB")
   }
   static var consentOnce: String {
-    String(localized: "It downloads once, then it stays on this phone.",
-           comment: "Consent card body text")
+    String(localized: "After you agree, it downloads in the background and stays on this phone.",
+           comment: "Consent card body text explaining the background download after approval")
   }
   static var consentCellular: String {
     String(localized: "You are not on Wi-Fi. A download this large is better on Wi-Fi.",
@@ -299,16 +299,21 @@ final class FirstRunModel: ObservableObject {
   private let path: any NetworkPathReporting
   private let hasLocalModel: () -> Bool
   private let hasPersonalKey: () -> Bool
+  private let hasDownloadConsent: () -> Bool
   private var pendingStart: (() -> Void)?
 
   /// Nonisolated so it can be a SwiftUI view's default argument, which is always evaluated outside
   /// the actor. It only stores its collaborators; nothing here touches published state.
   nonisolated init(path: any NetworkPathReporting = NetworkPathObserver(),
                    hasLocalModel: @escaping () -> Bool = FirstRunModel.localModelExists,
-                   hasPersonalKey: @escaping () -> Bool = FirstRunModel.personalKeyConfigured) {
+                   hasPersonalKey: @escaping () -> Bool = FirstRunModel.personalKeyConfigured,
+                   hasDownloadConsent: @escaping () -> Bool = {
+                     UserDefaults.standard.bool(forKey: TranslationModelDownloadCoordinator.consentKey)
+                   }) {
     self.path = path
     self.hasLocalModel = hasLocalModel
     self.hasPersonalKey = hasPersonalKey
+    self.hasDownloadConsent = hasDownloadConsent
   }
 
   nonisolated static func fromLaunchArguments(
@@ -343,6 +348,12 @@ final class FirstRunModel: ObservableObject {
   /// Gates a session start. With the model already on disk the start runs straight through, so a
   /// returning user never sees a download step for a download that will not happen.
   func requestSessionStart(_ start: @escaping () -> Void) {
+    // A prior explicit decision applies to the same model on later launches. The coordinator then
+    // resumes its durable SDK handle instead of presenting a second consent card.
+    if !hasLocalModel(), hasDownloadConsent() {
+      start()
+      return
+    }
     switch ModelDownloadConsent.decision(hasLocalModel: hasLocalModel(), cost: path.currentCost,
                                         hasPersonalKey: hasPersonalKey()) {
     case .startImmediately:
