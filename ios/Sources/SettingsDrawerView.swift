@@ -87,6 +87,25 @@ private struct SettingsDrawerPanel: View {
           if value.translation.width > 60 { model.close() }
         }
     )
+    // A native alert needs a stable presentation host. Keeping it on the scroll view's computed
+    // row subtree made iOS occasionally render only an empty vertical shape instead of its copy.
+    .alert(
+      String(localized: "Remove downloaded model?",
+             comment: "Confirmation title before deleting SDK-managed model artifacts"),
+      isPresented: $isRemoveDownloadedModelConfirmationPresented
+    ) {
+      Button(
+        String(localized: "Remove model",
+                        comment: "Destructive confirmation button for downloaded model removal"),
+        role: .destructive,
+        action: removeDownloadedModel
+      )
+      Button(String(localized: "Cancel", comment: "Cancellation button for downloaded model removal"),
+             role: .cancel) {}
+    } message: {
+      Text("This removes only the downloaded translation model. Your conversations, languages, and settings stay on this phone.",
+           comment: "Confirmation message explaining the scope of downloaded model removal")
+    }
   }
 
   private var header: some View {
@@ -176,23 +195,6 @@ private struct SettingsDrawerPanel: View {
         ),
         action: model.copyContactEmail
       )
-    }
-    .alert(
-      String(localized: "Remove downloaded model?",
-             comment: "Confirmation title before deleting SDK-managed model artifacts"),
-      isPresented: $isRemoveDownloadedModelConfirmationPresented
-    ) {
-      Button(
-        String(localized: "Remove model",
-                         comment: "Destructive confirmation button for downloaded model removal"),
-        role: .destructive,
-        action: removeDownloadedModel
-      )
-      Button(String(localized: "Cancel", comment: "Cancellation button for downloaded model removal"),
-             role: .cancel) {}
-    } message: {
-      Text("This removes only the downloaded translation model. Your conversations, languages, and settings stay on this phone.",
-           comment: "Confirmation message explaining the scope of downloaded model removal")
     }
   }
 

@@ -440,6 +440,40 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(clear.isEnabled)
   }
 
+  func testTheDrawerShowsAReadableDownloadedModelRemovalAlertAndCanCancelIt() {
+    let app = launch(state: "setup")
+    app.buttons["Settings"].tap()
+
+    let remove = app.buttons["settings-remove-downloaded-model"]
+    XCTAssertTrue(remove.waitForExistence(timeout: 5))
+    XCTAssertTrue(remove.isEnabled)
+    remove.tap()
+
+    let alert = app.alerts["Remove downloaded model?"]
+    XCTAssertTrue(alert.waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(alert.frame.width, 0)
+    XCTAssertGreaterThan(alert.frame.height, 0)
+
+    let title = alert.staticTexts["Remove downloaded model?"]
+    let message = alert.staticTexts[
+      "This removes only the downloaded translation model. Your conversations, languages, and settings stay on this phone."
+    ]
+    let confirm = alert.buttons["Remove model"]
+    let cancel = alert.buttons["Cancel"]
+    XCTAssertTrue(title.exists)
+    XCTAssertTrue(message.exists)
+    XCTAssertGreaterThan(title.frame.width, 0)
+    XCTAssertGreaterThan(message.frame.height, 0)
+    XCTAssertTrue(confirm.exists)
+    XCTAssertTrue(cancel.isHittable)
+
+    cancel.tap()
+
+    XCTAssertTrue(waitForDisappearance(alert))
+    XCTAssertTrue(remove.exists)
+    XCTAssertTrue(remove.isEnabled)
+  }
+
   // MARK: - App language
 
   /// The row exists, sits in the drawer's list, and names the language in force. It deliberately
@@ -474,4 +508,3 @@ final class RealtimeTranslateUITests: XCTestCase {
     return app
   }
 }
-
