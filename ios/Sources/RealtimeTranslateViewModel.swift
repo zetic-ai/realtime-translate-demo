@@ -476,6 +476,25 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
   }
 
+  /// Removing managed files while the model is loading or serving a session can invalidate a mapped
+  /// model underneath the runtime. A user can end the session first; an idle resident model is
+  /// explicitly closed by `closeModelForRemoval()` before the SDK removes its artifacts.
+  var canRemoveDownloadedModel: Bool {
+    switch state {
+    case .setup, .modelLoadFailed: true
+    default: false
+    }
+  }
+
+  func closeModelForRemoval() async -> Bool {
+    guard canRemoveDownloadedModel else { return false }
+    sessionTask?.cancel()
+    sessionTask = nil
+    translationRuntime.cancelLoad()
+    await translationRuntime.close()
+    return true
+  }
+
   /// Whether the session banner has anything to say right now. The root view needs to know
   /// before it lays the screen out, because a banner that has to be bounded at the accessibility
   /// sizes must not leave an empty bounded box behind in the states that have no banner.

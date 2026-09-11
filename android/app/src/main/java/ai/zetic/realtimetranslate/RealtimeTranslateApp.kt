@@ -1,6 +1,7 @@
 package ai.zetic.realtimetranslate
 
 import android.content.Context
+import com.zeticai.mlange.core.background.BackgroundDownloadState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -71,6 +72,8 @@ sealed interface UiAction {
     data object RequestPermission : UiAction
     data class SelectInput(val speaker: Speaker, val language: SpeechLanguage) : UiAction
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
+    data object ScheduleModelDownload : UiAction
+    data object RemoveDownloadedModel : UiAction
     data object StartConversation : UiAction
     data object EndSession : UiAction
     data object ClearConversation : UiAction
@@ -84,6 +87,8 @@ fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RequestPermission -> SessionAction.Retry
     is UiAction.SelectInput -> SessionAction.InputLanguageChanged(speaker, language)
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
+    UiAction.ScheduleModelDownload -> SessionAction.ScheduleBackgroundDownload(context)
+    UiAction.RemoveDownloadedModel -> SessionAction.RemoveDownloadedModel(context)
     UiAction.StartConversation -> SessionAction.StartConversation(context)
     UiAction.EndSession -> SessionAction.EndSession
     UiAction.ClearConversation -> SessionAction.ClearConversation
@@ -93,7 +98,9 @@ fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.Retry -> SessionAction.Retry
 }
 
-fun statusLabel(state: SessionUiState): UiText = when (state.phase) {
+fun statusLabel(state: SessionUiState): UiText = when {
+    state.backgroundDownload?.isActive == true -> UiText.res(R.string.status_model_download_in_progress)
+    else -> when (state.phase) {
     SessionPhase.PermissionRequired -> UiText.res(R.string.status_permission_required)
     SessionPhase.LoadingModel -> UiText.res(R.string.status_preparing_model)
     SessionPhase.ModelLoadFailed -> UiText.res(R.string.status_model_unavailable)
@@ -107,6 +114,7 @@ fun statusLabel(state: SessionUiState): UiText = when (state.phase) {
     SessionPhase.TranslatingA -> UiText.res(R.string.status_translating, Speaker.B.label)
     SessionPhase.TranslatingB -> UiText.res(R.string.status_translating, Speaker.A.label)
     SessionPhase.Error -> UiText.res(R.string.status_error)
+    }
 }
 
 /**
@@ -336,7 +344,35 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 }
 
 @Composable private fun SessionBanner(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit) {
-    when (state.phase) {
+    when {
+        state.modelRemovalMessage != null -> Banner {
+            Text(state.modelRemovalMessage.text(), color = TextPrimary, fontSize = 14.sp)
+        }
+        state.backgroundDownload?.isActive == true -> Banner {
+            val progress = state.backgroundDownload.progress
+            Text(
+                stringResource(R.string.banner_model_download_in_progress, progress?.times(100)?.toInt() ?: 0),
+                color = TextPrimary,
+                fontSize = 14.sp,
+            )
+            LinearProgressIndicator(
+                progress = { progress ?: 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = Accent,
+                trackColor = DividerLine,
+            )
+            Text(stringResource(R.string.banner_model_download_wait), color = TextSecondary, fontSize = 12.sp)
+        }
+        state.backgroundDownload?.state in setOf(BackgroundDownloadState.FAILED, BackgroundDownloadState.STOPPED) -> Banner {
+            Text(
+                state.backgroundDownload?.errorMessage ?: stringResource(R.string.banner_model_download_failed),
+                color = Error,
+                fontSize = 14.sp,
+            )
+            val retry = stringResource(R.string.banner_retry_model_download)
+            BannerAction(retry, retry) { onAction(UiAction.Retry) }
+        }
+        else -> when (state.phase) {
         SessionPhase.PermissionRequired -> Banner {
             Text(stringResource(R.string.banner_permission_body), color = TextPrimary, fontSize = 14.sp)
             if (state.permissionPermanentlyDenied) {
@@ -378,6 +414,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             BannerAction(tryAgain, tryAgain) { onAction(UiAction.Retry) }
         }
         else -> Unit
+        }
     }
 }
 
@@ -554,6 +591,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 private fun bottomHint(state: SessionUiState): UiText {
     val active = state.activeSpeaker()
     return when {
+        state.backgroundDownload?.isActive == true -> UiText.res(R.string.hint_model_download_in_progress)
         state.phase == SessionPhase.PermissionRequired -> UiText.res(R.string.hint_grant_microphone)
         state.phase == SessionPhase.LoadingModel || state.phase == SessionPhase.ModelLoadFailed ->
             UiText.res(R.string.hint_model_not_ready)

@@ -9,6 +9,8 @@ struct SettingsDrawerOverlay: View {
   /// still knows nothing about the view model behind it.
   let canClearConversation: Bool
   let clearConversation: () -> Void
+  let canRemoveDownloadedModel: Bool
+  let removeDownloadedModel: () -> Void
   /// The app-language override, owned by the root view's `@AppStorage` so the environment locale
   /// and the row can never disagree, and handed down here the same way the clear action is.
   let appLanguage: AppLanguage
@@ -20,6 +22,8 @@ struct SettingsDrawerOverlay: View {
         Scrim(close: model.close)
         SettingsDrawerPanel(model: model, canClearConversation: canClearConversation,
                             clearConversation: clearConversation,
+                            canRemoveDownloadedModel: canRemoveDownloadedModel,
+                            removeDownloadedModel: removeDownloadedModel,
                             appLanguage: appLanguage, selectAppLanguage: selectAppLanguage)
           .transition(.move(edge: .trailing))
       }
@@ -51,8 +55,11 @@ private struct SettingsDrawerPanel: View {
   @ObservedObject var model: SettingsDrawerModel
   let canClearConversation: Bool
   let clearConversation: () -> Void
+  let canRemoveDownloadedModel: Bool
+  let removeDownloadedModel: () -> Void
   let appLanguage: AppLanguage
   let selectAppLanguage: (AppLanguage) -> Void
+  @State private var isRemoveDownloadedModelConfirmationPresented = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -80,6 +87,25 @@ private struct SettingsDrawerPanel: View {
           if value.translation.width > 60 { model.close() }
         }
     )
+    // A native alert needs a stable presentation host. Keeping it on the scroll view's computed
+    // row subtree made iOS occasionally render only an empty vertical shape instead of its copy.
+    .alert(
+      String(localized: "Remove downloaded model?",
+             comment: "Confirmation title before deleting SDK-managed model artifacts"),
+      isPresented: $isRemoveDownloadedModelConfirmationPresented
+    ) {
+      Button(
+        String(localized: "Remove model",
+                        comment: "Destructive confirmation button for downloaded model removal"),
+        role: .destructive,
+        action: removeDownloadedModel
+      )
+      Button(String(localized: "Cancel", comment: "Cancellation button for downloaded model removal"),
+             role: .cancel) {}
+    } message: {
+      Text("This removes only the downloaded translation model. Your conversations, languages, and settings stay on this phone.",
+           comment: "Confirmation message explaining the scope of downloaded model removal")
+    }
   }
 
   private var header: some View {
@@ -123,6 +149,25 @@ private struct SettingsDrawerPanel: View {
           .clearConversationAccessibilityLabel(isEnabled: canClearConversation),
         isEnabled: canClearConversation,
         action: { model.clearConversation(clearConversation) }
+      )
+      ThinDivider()
+      SettingsRow(
+        title: String(localized: "Remove downloaded model",
+                      comment: "Settings drawer row title for deleting SDK-managed model artifacts"),
+        subtitle: canRemoveDownloadedModel
+          ? String(localized: "You will be asked before the next download",
+                   comment: "Settings drawer row subtitle when downloaded model removal is available")
+          : String(localized: "End the session before removing the model",
+                   comment: "Settings drawer row subtitle when the model is in use"),
+        symbol: "externaldrive.badge.minus",
+        identifier: "settings-remove-downloaded-model",
+        accessibilityLabel: canRemoveDownloadedModel
+          ? String(localized: "Remove downloaded model",
+                   comment: "Accessibility label for available downloaded model removal")
+          : String(localized: "Remove downloaded model, unavailable while the session is active",
+                   comment: "Accessibility label for unavailable downloaded model removal"),
+        isEnabled: canRemoveDownloadedModel,
+        action: { isRemoveDownloadedModelConfirmationPresented = true }
       )
       ThinDivider()
       AppLanguageRow(selected: appLanguage, select: selectAppLanguage)

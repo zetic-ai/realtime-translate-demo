@@ -109,8 +109,10 @@ struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
   @StateObject private var settings = SettingsDrawerModel()
   @StateObject private var firstRun: FirstRunModel
+  @StateObject private var modelDownload = TranslationModelDownloadCoordinator()
   @StateObject private var conversationCopy = ConversationCopyModel()
   @StateObject private var typedInput = TypedInputModel()
+  @State private var startsWhenModelDownloadFinishes = false
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
   /// The app-language override, as its raw value. `@AppStorage` cannot bind an enum without a
@@ -144,6 +146,9 @@ struct RealtimeTranslateRootView: View {
       .overlay {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
                               clearConversation: viewModel.clearConversation,
+                              canRemoveDownloadedModel: viewModel.canRemoveDownloadedModel
+                                && !modelDownload.isRemoving,
+                              removeDownloadedModel: removeDownloadedModel,
                               appLanguage: AppLanguage.named(appLanguageRaw),
                               selectAppLanguage: selectAppLanguage)
       }
@@ -155,9 +160,15 @@ struct RealtimeTranslateRootView: View {
       .environment(\.locale, localeOverride ?? .autoupdatingCurrent)
       .onAppear {
         viewModel.adoptExistingPermission()
+        modelDownload.resumeIfConsented(hasLocalModel: FirstRunModel.localModelExists())
         updateScreenAwake()
       }
       .onDisappear { screenAwake.release() }
+      .onChange(of: modelDownload.phase) { phase in
+        guard phase == .installed, startsWhenModelDownloadFinishes else { return }
+        startsWhenModelDownloadFinishes = false
+        viewModel.startSession()
+      }
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
       .onChange(of: scenePhase) { _ in updateScreenAwake() }
   }
@@ -180,7 +191,7 @@ struct RealtimeTranslateRootView: View {
     case .permissionPriming:
       PermissionPrimingView(allow: allowPermissions, skip: { primingSeen = true })
     case .none:
-      ModelConsentOverlay(prompt: firstRun.consent, download: firstRun.acceptConsent,
+      ModelConsentOverlay(prompt: firstRun.consent, download: acceptModelDownloadConsent,
                           dismiss: firstRun.declineConsent)
     }
   }
@@ -208,7 +219,55 @@ struct RealtimeTranslateRootView: View {
   /// Every path that would load the model routes through the consent gate, including the retry
   /// after a failed load: that is exactly when a large transfer may be about to start again.
   private func startSession() {
-    firstRun.requestSessionStart { [viewModel] in viewModel.startSession() }
+    firstRun.requestSessionStart {
+      // Keep the old missing-key failure in the session banner. The coordinator deliberately does
+      // not create a background job without a key, so it cannot be the component that reports it.
+      guard FirstRunModel.personalKeyConfigured() else {
+        startsWhenModelDownloadFinishes = false
+        viewModel.startSession()
+        return
+      }
+      guard modelDownload.requestModelUse(hasLocalModel: FirstRunModel.localModelExists()) else {
+        startsWhenModelDownloadFinishes = modelDownload.hasDownloadConsent
+        return
+      }
+      startsWhenModelDownloadFinishes = false
+      viewModel.startSession()
+    }
+  }
+
+  private func acceptModelDownloadConsent() {
+    modelDownload.recordConsent()
+    firstRun.acceptConsent()
+  }
+
+  private func removeDownloadedModel() {
+    Task {
+      startsWhenModelDownloadFinishes = false
+      guard await viewModel.closeModelForRemoval() else {
+        settings.toasts.show(String(
+          localized: "End the session before removing the downloaded model.",
+          comment: "Toast after removal is attempted while the translation model is in use"
+        ))
+        return
+      }
+
+      switch await modelDownload.removeDownloadedModel() {
+      case .removed:
+        settings.close()
+        settings.toasts.show(String(
+          localized: "Downloaded model removed",
+          comment: "Toast after downloaded model artifacts and download consent are removed"
+        ))
+      case .inUse:
+        settings.toasts.show(String(
+          localized: "The model is in use. End the session before removing it.",
+          comment: "Toast after the SDK reports that a downloaded model is still in use"
+        ))
+      case let .failed(message):
+        settings.toasts.show(message)
+      }
+    }
   }
 
   private var mainScreen: some View {
@@ -222,7 +281,8 @@ struct RealtimeTranslateRootView: View {
         // pushed off the bottom edge. Above the same ceiling the hint line goes at, the banner
         // scrolls inside a bounded box instead, and only when there is a banner to bound: an
         // empty scroller would leave a blank third of the screen behind in every other state.
-        if viewModel.hasSessionBanner, dynamicTypeSize >= Layout.hintCeiling {
+        if (viewModel.hasSessionBanner || modelDownload.isBackgroundDownloadInProgress),
+           dynamicTypeSize >= Layout.hintCeiling {
           ScrollView { sessionBanner }
             .frame(maxHeight: Layout.bannerCeiling)
             // Ahead of the transcript in the queue for what is left. The transcript's own
@@ -249,7 +309,8 @@ struct RealtimeTranslateRootView: View {
       // the screen down instead of overlapping anything.
       .safeAreaInset(edge: .top, spacing: 0) {
         VStack(spacing: 0) {
-          StatusStrip(title: viewModel.state.title)
+          StatusStrip(title: modelDownload.isBackgroundDownloadInProgress
+                      ? modelDownload.phase.title : viewModel.state.title)
           ThinDivider()
         }
         .background(DesignToken.surface)
@@ -283,7 +344,8 @@ struct RealtimeTranslateRootView: View {
         }
       }
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        BottomBar(viewModel: viewModel, startSession: startSession, openTypedInput: typedInput.open)
+        BottomBar(viewModel: viewModel, backgroundDownload: modelDownload,
+                  startSession: startSession, openTypedInput: typedInput.open)
       }
       // A sheet rather than an inline field: the keyboard covers the bottom bar either way, and a
       // sheet is the surface VoiceOver already treats as modal.
@@ -301,7 +363,7 @@ struct RealtimeTranslateRootView: View {
   private var emptyHint: String? { ConversationEmptyHint.text(for: viewModel.state) }
 
   private var sessionBanner: some View {
-    SessionBanner(viewModel: viewModel, startSession: startSession,
+    SessionBanner(viewModel: viewModel, backgroundDownload: modelDownload, startSession: startSession,
                   recoverFromError: viewModel.recoverFromError)
   }
 }
@@ -451,11 +513,32 @@ private struct LanguageBar: View {
 
 private struct SessionBanner: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
+  @ObservedObject var backgroundDownload: TranslationModelDownloadCoordinator
   let startSession: () -> Void
   let recoverFromError: () -> Void
 
   var body: some View {
-    switch viewModel.state {
+    if backgroundDownload.isBackgroundDownloadInProgress {
+      banner {
+        HStack(spacing: 8) {
+          ProgressView().progressViewStyle(.circular).tint(DesignToken.accent)
+          Text(backgroundDownload.phase.title)
+            .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("background-model-download-headline")
+        }
+        if let detail = backgroundDownload.phase.detail {
+          Text(detail)
+            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("background-model-download-detail")
+        }
+        if case let .downloading(progress) = backgroundDownload.phase, let progress {
+          ProgressView(value: progress).tint(DesignToken.accent)
+        }
+      }
+    } else {
+      switch viewModel.state {
     case .permissionRequired:
       banner {
         Text("Turn Translate needs microphone and speech recognition access on this device.",
@@ -533,6 +616,7 @@ private struct SessionBanner: View {
         }
       } else {
         EmptyView()
+      }
       }
     }
   }
@@ -882,6 +966,7 @@ private struct ReplayButton: View {
 
 private struct BottomBar: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
+  @ObservedObject var backgroundDownload: TranslationModelDownloadCoordinator
   let startSession: () -> Void
   let openTypedInput: () -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -927,6 +1012,9 @@ private struct BottomBar: View {
   }
 
   private var hint: String {
+    if backgroundDownload.isBackgroundDownloadInProgress {
+      return backgroundDownload.phase.title
+    }
     switch viewModel.state {
     case .permissionRequired:
       return String(localized: "Grant microphone access to enable push-to-talk.",

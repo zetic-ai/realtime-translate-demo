@@ -10,6 +10,7 @@
     <!-- Status strip -->
     <string name="status_permission_required">Autorisation requise</string>
     <string name="status_preparing_model">Préparation du modèle de traduction</string>
+    <string name="status_model_download_in_progress">Téléchargement du modèle en cours</string>
     <string name="status_model_unavailable">Modèle indisponible</string>
     <string name="status_conversation_ready">Prêt à parler</string>
     <string name="status_ready_to_start">Prêt à démarrer</string>
@@ -28,13 +29,17 @@
     <string name="menu_spoken_language">Langue parlée</string>
 
     <!-- Session banner -->
-    <string name="banner_permission_body">Turn Translate a besoin du micro pour reconnaître la parole sur cet appareil.</string>
+    <string name="banner_permission_body">Zetic Relay a besoin du micro pour reconnaître la parole sur cet appareil.</string>
     <string name="banner_open_app_settings">Ouvrir les Paramètres</string>
     <string name="banner_allow_microphone">Autoriser le micro</string>
     <string name="banner_request_permission_accessibility">Demander l’autorisation du micro</string>
     <string name="banner_loading_model">Chargement du modèle de traduction %1$d %%</string>
     <string name="banner_controls_unlock">Les commandes s’activent quand le modèle est prêt.</string>
     <string name="banner_retry_model_load">Recharger le modèle</string>
+    <string name="banner_model_download_in_progress">Téléchargement du modèle en cours %1$d %%</string>
+    <string name="banner_model_download_wait">La traduction commencera lorsque le téléchargement sera terminé.</string>
+    <string name="banner_model_download_failed">Le téléchargement du modèle a échoué.</string>
+    <string name="banner_retry_model_download">Réessayer le téléchargement du modèle</string>
     <string name="banner_try_again">Réessayer</string>
 
     <!-- Transcript -->
@@ -51,6 +56,7 @@
     <!-- Bottom bar -->
     <string name="hint_grant_microphone">Autorisez le micro pour activer les boutons de parole.</string>
     <string name="hint_model_not_ready">Les boutons de parole s’activent quand le modèle est prêt.</string>
+    <string name="hint_model_download_in_progress">Téléchargement du modèle en cours. La traduction sera prête à la fin.</string>
     <string name="hint_resolve_error">Corrigez l’erreur ci-dessus pour continuer.</string>
     <string name="hint_start_conversation">Touchez « Démarrer la conversation » pour charger le modèle de traduction.</string>
     <string name="hint_other_speaker_active">L’interlocuteur %1$s ne peut pas parler tant que %2$s a la parole.</string>
@@ -79,6 +85,14 @@
     <string name="settings_clear_subtitle">Conserve la session et les langues</string>
     <string name="settings_clear_accessibility_available">%1$s, conserve la session et les langues</string>
     <string name="settings_clear_accessibility_unavailable">%1$s, indisponible, il n’y a rien à effacer</string>
+    <string name="settings_remove_model_title">Supprimer le modèle téléchargé</string>
+    <string name="settings_remove_model_subtitle">Le télécharger à nouveau nécessitera votre accord</string>
+    <string name="settings_remove_model_unavailable">Terminez la traduction en cours avant</string>
+    <string name="settings_remove_model_accessibility_available">%1$s, le télécharger à nouveau nécessitera votre accord</string>
+    <string name="settings_remove_model_accessibility_unavailable">%1$s, indisponible. Terminez la traduction en cours avant</string>
+    <string name="settings_remove_model_confirm_title">Supprimer le modèle téléchargé ?</string>
+    <string name="settings_remove_model_confirm_body">Le modèle de traduction sera supprimé de ce téléphone. Vos conversations et vos réglages resteront ici.</string>
+    <string name="settings_remove_model_confirm_action">Supprimer le modèle</string>
     <string name="toast_conversation_cleared">Conversation effacée</string>
     <string name="settings_app_language_title">Langue de l’app</string>
     <string name="settings_app_language_accessibility">Langue de l’app, %1$s</string>
@@ -127,4 +141,7 @@
     <string name="error_model_stopped">Le modèle de traduction s’est arrêté de façon inattendue.</string>
     <string name="error_model_empty_result">Le modèle de traduction n’a renvoyé aucun résultat.</string>
     <string name="error_translation_failed">Échec de la traduction.</string>
+    <string name="model_removal_complete">Modèle téléchargé supprimé</string>
+    <string name="model_removal_in_use">Terminez la traduction en cours avant de supprimer le modèle.</string>
+    <string name="model_removal_failed">Le modèle téléchargé n’a pas pu être supprimé.</string>
 </resources>

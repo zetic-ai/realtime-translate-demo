@@ -102,6 +102,15 @@ object SettingsDrawerCopy {
         },
         UiText.res(R.string.settings_clear_title),
     )
+
+    fun removeModelAccessibilityLabel(isEnabled: Boolean): UiText = UiText.res(
+        if (isEnabled) {
+            R.string.settings_remove_model_accessibility_available
+        } else {
+            R.string.settings_remove_model_accessibility_unavailable
+        },
+        UiText.res(R.string.settings_remove_model_title),
+    )
 }
 
 /**
@@ -115,8 +124,10 @@ object SettingsDrawerCopy {
 fun SettingsDrawerContent(
     appInfo: AppInfo,
     canClearConversation: Boolean,
+    canRemoveDownloadedModel: Boolean,
     appLanguage: AppLanguage,
     onClearConversation: () -> Unit,
+    onRemoveDownloadedModel: () -> Unit,
     onSelectAppLanguage: (AppLanguage) -> Unit,
     onVisitWebsite: () -> Unit,
     onCopyContact: () -> Unit,
@@ -153,6 +164,19 @@ fun SettingsDrawerContent(
             icon = Icons.Filled.Delete,
             enabled = canClearConversation,
             onClick = onClearConversation,
+        )
+        HorizontalDivider(color = DividerLine)
+
+        SettingsRow(
+            title = stringResource(R.string.settings_remove_model_title),
+            subtitle = stringResource(
+                if (canRemoveDownloadedModel) R.string.settings_remove_model_subtitle
+                else R.string.settings_remove_model_unavailable,
+            ),
+            accessibilityLabel = SettingsDrawerCopy.removeModelAccessibilityLabel(canRemoveDownloadedModel).text(),
+            icon = Icons.Filled.Delete,
+            enabled = canRemoveDownloadedModel,
+            onClick = onRemoveDownloadedModel,
         )
         HorizontalDivider(color = DividerLine)
 

@@ -1,17 +1,17 @@
 name: RealtimeTranslate
 packages:
   ZeticMLangeiOS:
-    url: https://github.com/zetic-ai/ZeticMLangeiOS.git
-    exactVersion: 1.10.0
+    url: git@github.com:zetic-ai/mlange_sdk.git
+    exactVersion: 0.0.0-internal.035dd5a8
 options:
   minimumXcodeGenVersion: 2.38.0
   developmentLanguage: en
 settings:
   base:
     SWIFT_VERSION: 5.0
-    # ZeticMLange 1.10.0 is built for iOS 16.6 or later.
+    # The internal ZeticMLange release is linked into this iOS 16.6-or-later app.
     IPHONEOS_DEPLOYMENT_TARGET: 16.6
-    PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.realtimetranslate
+    PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.zeticrelay
 targets:
   RealtimeTranslate:
     type: application
@@ -23,6 +23,8 @@ targets:
       - sdk: Accelerate.framework
     settings:
       base:
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 8WTTXXB63L
         INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_NAME: RealtimeTranslate
         GENERATE_INFOPLIST_FILE: NO

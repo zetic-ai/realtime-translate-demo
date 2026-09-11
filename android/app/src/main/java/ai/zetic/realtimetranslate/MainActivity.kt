@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
         if (isPermissionGranted) viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
+        viewModel.dispatch(SessionAction.PrepareBackgroundDownload(this))
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {

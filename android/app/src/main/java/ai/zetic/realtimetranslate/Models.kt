@@ -81,6 +81,8 @@ data class SessionUiState(
     val speechLanguages: List<SpeechLanguage> = listOf(SpeechLanguage.Automatic),
     val speechLanguageCatalogLoading: Boolean = false,
     val speechLanguageCatalogMessage: UiText? = null,
+    val backgroundDownload: ModelDownloadUiState? = null,
+    val modelRemovalMessage: UiText? = null,
     val errorMessage: UiText? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)
@@ -91,6 +93,18 @@ data class SessionUiState(
      * never strands a bubble a translation is about to land in.
      */
     val canClearConversation: Boolean get() = conversations.isNotEmpty() && activeSpeaker() == null
+
+    /** An idle session can release its runtime before the SDK removes the managed model files. */
+    val canRemoveDownloadedModel: Boolean
+        get() = backgroundDownload != null && phase !in setOf(
+            SessionPhase.LoadingModel,
+            SessionPhase.ListeningA,
+            SessionPhase.ListeningB,
+            SessionPhase.FinalizingA,
+            SessionPhase.FinalizingB,
+            SessionPhase.TranslatingA,
+            SessionPhase.TranslatingB,
+        )
 
     fun activeSpeaker(): Speaker? = when (phase) {
         SessionPhase.ListeningA, SessionPhase.FinalizingA, SessionPhase.TranslatingA -> Speaker.A
