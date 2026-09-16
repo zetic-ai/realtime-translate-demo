@@ -3,6 +3,7 @@ package ai.zetic.realtimetranslate
 import android.content.Context
 import android.content.ContextWrapper
 import com.zeticai.mlange.core.background.BackgroundDownloadHandle
+import com.zeticai.mlange.core.background.BackgroundDownloadState
 import com.zeticai.mlange.core.background.BackgroundDownloadStatus
 import com.zeticai.mlange.core.background.ModelRemovalResult
 import kotlinx.coroutines.CoroutineStart
@@ -62,6 +63,32 @@ class ModelDownloadTest {
         assertNull(preferences.backgroundDownloadHandleId)
     }
 
+    @Test fun `refresh maps available SDK download bytes to progress`() = runTest {
+        val preferences = MemoryModelDownloadPreferences(
+            modelDownloadConsent = true,
+            backgroundDownloadHandleId = "existing",
+        )
+        val sdk = FakeModelDownloadSdk().apply {
+            statusResult = BackgroundDownloadStatus(
+                handle = BackgroundDownloadHandle("existing"),
+                state = BackgroundDownloadState.DOWNLOADING,
+                bytesDownloaded = 42L,
+                totalBytes = 100L,
+            )
+        }
+        val download = HyMt2BackgroundDownload(
+            context = TestContext(),
+            preferences = preferences,
+            personalKey = "key",
+            sdk = sdk,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
+        )
+
+        val state = checkNotNull(download.refresh())
+
+        assertEquals(0.42f, state.progress)
+    }
+
     private class TestContext : ContextWrapper(null) {
         override fun getApplicationContext(): Context = this
     }
@@ -74,6 +101,7 @@ class ModelDownloadTest {
 
     private class FakeModelDownloadSdk : ModelDownloadSdk {
         var afterHandleCreated: () -> Unit = {}
+        var statusResult: BackgroundDownloadStatus? = null
         var statusLookups = 0
         val stoppedHandles = mutableListOf<String>()
 
@@ -82,7 +110,7 @@ class ModelDownloadTest {
 
         override fun status(context: Context, handle: BackgroundDownloadHandle): BackgroundDownloadStatus {
             statusLookups += 1
-            error("status should not be reached after cancellation")
+            return checkNotNull(statusResult) { "status should not be reached after cancellation" }
         }
 
         override fun stop(context: Context, handle: BackgroundDownloadHandle) {

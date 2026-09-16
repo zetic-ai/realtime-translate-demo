@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.zeticai.mlange.core.background.BackgroundDownloadState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -231,6 +233,29 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun unknownDownloadProgressDoesNotMisrepresentItAsZeroPercent() {
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                backgroundDownload = ModelDownloadUiState(BackgroundDownloadState.DOWNLOADING),
+            ),
+        )
+
+        composeRule.onAllNodesWithText("Model download in progress")[0].assertIsDisplayed()
+        composeRule.onNodeWithText("Model download in progress 0%").assertDoesNotExist()
+    }
+
+    @Test fun knownDownloadProgressKeepsItsNumericPercentage() {
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                backgroundDownload = ModelDownloadUiState(BackgroundDownloadState.DOWNLOADING, progress = 0.42f),
+            ),
+        )
+
+        composeRule.onNodeWithText("Model download in progress 42%").assertIsDisplayed()
     }
 
     @Test fun modelLoadFailureOffersInlineRetryOnTheMainScreen() {

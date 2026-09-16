@@ -350,17 +350,26 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
         }
         state.backgroundDownload?.isActive == true -> Banner {
             val progress = state.backgroundDownload.progress
-            Text(
-                stringResource(R.string.banner_model_download_in_progress, progress?.times(100)?.toInt() ?: 0),
-                color = TextPrimary,
-                fontSize = 14.sp,
-            )
-            LinearProgressIndicator(
-                progress = { progress ?: 0f },
-                modifier = Modifier.fillMaxWidth(),
-                color = Accent,
-                trackColor = DividerLine,
-            )
+            if (progress == null) {
+                Text(stringResource(R.string.status_model_download_in_progress), color = TextPrimary, fontSize = 14.sp)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Accent,
+                    trackColor = DividerLine,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.banner_model_download_in_progress, (progress * 100).toInt()),
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                )
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Accent,
+                    trackColor = DividerLine,
+                )
+            }
             Text(stringResource(R.string.banner_model_download_wait), color = TextSecondary, fontSize = 12.sp)
             val cancel = stringResource(R.string.session_cancel)
             BannerAction(cancel, cancel) { onAction(UiAction.CancelModelPreparation) }
