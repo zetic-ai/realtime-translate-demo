@@ -6,8 +6,10 @@ import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.first
@@ -17,6 +19,8 @@ import kotlinx.coroutines.withTimeout
 import com.zeticai.mlange.core.model.llm.LLMNextTokenResult
 import com.zeticai.mlange.core.model.llm.LLMRunResult
 import java.util.concurrent.CountDownLatch
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.suspendCoroutine
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -167,6 +171,7 @@ class SessionViewModelTest {
         val viewModel = SessionViewModel(
             transcriberFactory = { transcriber },
             translator = translator,
+            audioInterruptionFactory = { FakeRecordingAudio() },
             initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
         )
         val korean = HyMt2Languages.all.first { it.code == "ko" }
@@ -263,6 +268,7 @@ class SessionViewModelTest {
         val viewModel = SessionViewModel(
             transcriberFactory = { transcriber },
             translator = translator,
+            audioInterruptionFactory = { FakeRecordingAudio() },
             initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
         )
 
@@ -335,6 +341,7 @@ class SessionViewModelTest {
         val viewModel = SessionViewModel(
             transcriberFactory = { transcriber },
             translator = translator,
+            audioInterruptionFactory = { FakeRecordingAudio() },
             initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
         )
 
@@ -346,6 +353,180 @@ class SessionViewModelTest {
         assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
         assertTrue(viewModel.state.value.conversationStarted)
         assertEquals(0, translator.loads)
+    }
+
+    @Test fun `reading and spoken languages survive a new view model`() = runTest {
+        val preferences = MemoryLanguagePreferences()
+        val languages = listOf(SpeechLanguage.Automatic, installed("en-US"), installed("fr-FR"), installed("ko-KR"))
+        val first = SessionViewModel(
+            translator = FakeTranslator(),
+            languagePreferences = preferences,
+            speechLanguageCatalog = FakeCatalog(languages),
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+        val french = HyMt2Languages.all.first { it.code == "fr" }
+
+        first.dispatch(SessionAction.ReadingLanguageChanged(Speaker.A, french))
+        first.dispatch(SessionAction.InputLanguageChanged(Speaker.A, SpeechLanguage.Automatic))
+        first.dispatch(SessionAction.InputLanguageChanged(Speaker.B, installed("en-US")))
+
+        val restored = SessionViewModel(
+            translator = FakeTranslator(),
+            languagePreferences = preferences,
+            speechLanguageCatalog = FakeCatalog(languages),
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+        restored.dispatch(SessionAction.RestoreLanguagePreferences(TestContext()))
+        restored.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        assertEquals("fr", restored.state.value.settingsFor(Speaker.A).readingLanguage.code)
+        assertEquals(SpeechLanguage.Automatic, restored.state.value.settingsFor(Speaker.A).inputLanguage)
+        assertEquals("en-US", (restored.state.value.settingsFor(Speaker.B).inputLanguage as SpeechLanguage.Installed).languageTag)
+    }
+
+    @Test fun `typed input enters the normal translation flow`() = runTest {
+        val translator = FakeTranslator()
+        val viewModel = SessionViewModel(
+            translator = translator,
+            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
+        )
+
+        viewModel.dispatch(SessionAction.SubmitTyped("  hello from keyboard  ", Speaker.B))
+        advanceUntilIdle()
+
+        val item = viewModel.state.value.conversations.single()
+        assertEquals(Speaker.B, item.speaker)
+        assertEquals("hello from keyboard", item.transcript)
+        assertEquals("en", item.targetLanguage.code)
+        assertEquals("translated", item.translation)
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+    }
+
+    @Test fun `a failed bubble can retry without starting a new conversation turn`() = runTest {
+        val translator = FakeTranslator()
+        val failed = bubble("failed").copy(translation = null, translationError = UiText.raw("offline"))
+        val viewModel = SessionViewModel(
+            translator = translator,
+            initialState = SessionUiState(
+                SessionPhase.Ready,
+                conversationStarted = true,
+                conversations = listOf(failed),
+            ),
+        )
+
+        viewModel.dispatch(SessionAction.RetryTranslation("failed"))
+        advanceUntilIdle()
+
+        assertEquals(1, translator.translations)
+        assertEquals("translated", viewModel.state.value.conversations.single().translation)
+        assertEquals(null, viewModel.state.value.conversations.single().translationError)
+    }
+
+    @Test fun `an old noncooperative translation cannot overwrite a newer request with the same bubble id`() = runTest {
+        val translator = NonCooperativeTranslationTranslator()
+        val failed = bubble("transcript-1").copy(translation = null, translationError = UiText.raw("offline"))
+        val viewModel = SessionViewModel(
+            translator = translator,
+            initialState = SessionUiState(
+                SessionPhase.Ready,
+                conversationStarted = true,
+                conversations = listOf(failed),
+            ),
+        )
+
+        viewModel.dispatch(SessionAction.RetryTranslation(failed.id))
+        runCurrent()
+        viewModel.dispatch(SessionAction.EndSession)
+        viewModel.dispatch(SessionAction.StartConversation(TestContext()))
+        runCurrent()
+        viewModel.dispatch(SessionAction.SubmitTyped("new request", Speaker.A))
+        runCurrent()
+
+        assertEquals(2, translator.pending.size)
+        translator.complete(index = 0, translation = "stale translation")
+        runCurrent()
+        assertEquals(SessionPhase.TranslatingA, viewModel.state.value.phase)
+        assertEquals(null, viewModel.state.value.conversations.single().translation)
+
+        translator.complete(index = 1, translation = "new translation")
+        runCurrent()
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertEquals("new translation", viewModel.state.value.conversations.single().translation)
+    }
+
+    @Test fun `cancelling model preparation returns to idle ready`() {
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            initialState = SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f),
+        )
+
+        viewModel.dispatch(SessionAction.CancelModelPreparation)
+
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertFalse(viewModel.state.value.conversationStarted)
+        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+    }
+
+    @Test fun `cancelled noncooperative model load cannot publish progress or success`() = runTest {
+        val translator = NonCooperativeLoadTranslator()
+        val viewModel = SessionViewModel(
+            translator = translator,
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+
+        viewModel.dispatch(SessionAction.StartConversation(TestContext()))
+        runCurrent()
+        assertEquals(SessionPhase.LoadingModel, viewModel.state.value.phase)
+
+        viewModel.dispatch(SessionAction.CancelModelPreparation)
+        translator.progress(0.9f)
+        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+        translator.complete()
+        runCurrent()
+
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertFalse(viewModel.state.value.conversationStarted)
+        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+    }
+
+    @Test fun `a newer partial keeps the last provisional translation until its replacement lands`() = runTest {
+        val transcriber = DelayedTranscriber()
+        val viewModel = SessionViewModel(
+            transcriberFactory = { transcriber },
+            translator = FakeTranslator(),
+            audioInterruptionFactory = { FakeRecordingAudio() },
+            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
+        )
+
+        viewModel.dispatch(SessionAction.PttPress(TestContext(), Speaker.A))
+        transcriber.listener.onPartial("first words")
+        advanceTimeBy(350)
+        runCurrent()
+        assertEquals("translated", viewModel.state.value.conversations.single().provisionalTranslation)
+
+        transcriber.listener.onPartial("first words and more")
+
+        assertEquals("translated", viewModel.state.value.conversations.single().provisionalTranslation)
+    }
+
+    @Test fun `audio focus loss abandons the active turn and asks the user to retry`() {
+        val audio = FakeRecordingAudio()
+        val transcriber = DelayedTranscriber()
+        val viewModel = SessionViewModel(
+            transcriberFactory = { transcriber },
+            translator = FakeTranslator(),
+            audioInterruptionFactory = { audio },
+            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
+        )
+
+        viewModel.dispatch(SessionAction.TogglePtt(TestContext(), Speaker.A))
+        transcriber.listener.onPartial("interrupted")
+        audio.interrupt()
+
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertTrue(viewModel.state.value.conversations.isEmpty())
+        assertEquals(UiText.res(R.string.audio_interrupted_notice), viewModel.state.value.notice)
+        assertTrue(transcriber.destroyed)
     }
 
     @Test fun `unload waits for a running translation before closing the model`() = runTest {
@@ -420,15 +601,61 @@ class SessionViewModelTest {
         override fun close() { closed = true }
     }
 
+    private class NonCooperativeLoadTranslator : HyMt2Translator {
+        private var progressCallback: ((Float) -> Unit)? = null
+        private var continuation: Continuation<Unit>? = null
+
+        override suspend fun load(context: Context, onProgress: (Float) -> Unit) = suspendCoroutine { continuation ->
+            progressCallback = onProgress
+            this.continuation = continuation
+        }
+
+        fun progress(value: Float) = checkNotNull(progressCallback).invoke(value)
+        fun complete() {
+            val pending = checkNotNull(continuation)
+            continuation = null
+            pending.resumeWith(Result.success(Unit))
+        }
+
+        override suspend fun translate(prompt: String) = "translated"
+        override fun close() = Unit
+    }
+
+    private class NonCooperativeTranslationTranslator : HyMt2Translator {
+        val pending = mutableListOf<Continuation<String>>()
+
+        override suspend fun load(context: Context, onProgress: (Float) -> Unit) = Unit
+
+        override suspend fun translate(prompt: String): String = suspendCoroutine { continuation ->
+            pending += continuation
+        }
+
+        fun complete(index: Int, translation: String) =
+            pending[index].resumeWith(Result.success(translation))
+
+        override fun close() = Unit
+    }
+
     private class DelayedTranscriber : SpeechTranscriber {
         lateinit var listener: SpeechTranscriptListener
         var startedLanguage: SpeechLanguage? = null
+        var destroyed = false
         override fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult {
             this.listener = listener
             startedLanguage = language
             return SpeechStartResult.Started
         }
         override fun stop() = Unit
-        override fun destroy() = Unit
+        override fun destroy() { destroyed = true }
+    }
+
+    private class FakeRecordingAudio : RecordingAudioInterruption {
+        private var onInterrupted: (() -> Unit)? = null
+        override fun start(onInterrupted: () -> Unit): Boolean {
+            this.onInterrupted = onInterrupted
+            return true
+        }
+        override fun stop() { onInterrupted = null }
+        fun interrupt() = checkNotNull(onInterrupted).invoke()
     }
 }

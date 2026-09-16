@@ -89,7 +89,7 @@ class FirstRunTest {
     // file used to list, and lives in LocalizationCatalogTest, which reads the catalog off disk.
 
     @Test fun `the words the app never translates stay constants rather than catalog entries`() {
-        assertEquals("Zetic Relay", FirstRunCopy.PRODUCT_NAME)
+        assertEquals("Turn Translate", FirstRunCopy.PRODUCT_NAME)
         assertEquals("contact@zetic.ai", SettingsDrawerCopy.CONTACT_EMAIL)
         assertEquals("https://zetic.ai", SettingsDrawerCopy.WEBSITE)
     }

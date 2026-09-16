@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        viewModel.dispatch(SessionAction.RestoreLanguagePreferences(this))
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
         if (isPermissionGranted) viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
         viewModel.dispatch(SessionAction.PrepareBackgroundDownload(this))

@@ -3,13 +3,18 @@ package ai.zetic.realtimetranslate
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
@@ -107,16 +112,18 @@ class RealtimeTranslateAppTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Newest appended card:", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithTag(CONVERSATION_BOTTOM_TAG).assertIsDisplayed()
     }
 
     @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithText("Zetic Relay").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("ZETIC").assertIsDisplayed()
+        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
 
-        val title = composeRule.onNodeWithText("Zetic Relay").fetchSemanticsNode().boundsInRoot
-        val wordmark = composeRule.onNodeWithContentDescription("ZETIC").fetchSemanticsNode().boundsInRoot
-        assertTrue(title.left < wordmark.left)
+        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
+        val settings = composeRule.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot
+        assertTrue(title.right < settings.left)
+        assertTrue(settings.width >= 44 * composeRule.activity.resources.displayMetrics.density)
     }
 
     @Test fun topLanguageBarShowsOneChipPerSpeakerMirroringBubbleSides() {
@@ -149,8 +156,58 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithContentDescription("Start speaker A").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Start speaker B").assertIsEnabled()
         composeRule.onNodeWithContentDescription("End session").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Type a message").assertIsEnabled()
         composeRule.onNodeWithText("Speaks").assertDoesNotExist()
         composeRule.onNodeWithText("Reads").assertDoesNotExist()
+    }
+
+    @Test fun typedInputSelectsSpeakerAndDispatchesTrimmedText() {
+        var action: UiAction? = null
+        setApp(readyConversationState(), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNodeWithText("Who is speaking?").assertIsDisplayed()
+        composeRule.onNodeWithText("B", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Message").performTextInput("  typed hello  ")
+        composeRule.onNodeWithText("Send").performClick()
+
+        assertEquals(UiAction.SubmitTyped("typed hello", Speaker.B), action)
+    }
+
+    @Test fun typedInputRemembersSpeakerFocusesFieldAndNamesTheTypingLanguage() {
+        var action: UiAction? = null
+        setApp(readyConversationState(), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused()
+        composeRule.onNodeWithText("B", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNodeWithText("What speaker B wants to say in Korean").assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused().performTextInput("again")
+        composeRule.onNodeWithText("Send").performClick()
+
+        assertEquals(UiAction.SubmitTyped("again", Speaker.B), action)
+    }
+
+    @Test fun failedBubbleOffersPerBubbleRetry() {
+        var action: UiAction? = null
+        val failed = item(Speaker.A, "hello", true).copy(translationError = UiText.raw("offline"))
+        setApp(readyConversationState().copy(conversations = listOf(failed)), onAction = { action = it })
+
+        composeRule.onNodeWithText("Retry translation").performClick()
+
+        assertEquals(UiAction.RetryTranslation(failed.id), action)
+    }
+
+    @Test fun modelPreparationCanBeCancelled() {
+        var action: UiAction? = null
+        setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f), onAction = { action = it })
+
+        composeRule.onAllNodesWithContentDescription("Cancel")[0].performClick()
+
+        assertEquals(UiAction.CancelModelPreparation, action)
     }
 
     @Test fun idleMainScreenStartsInOneTapAndKeepsPushToTalkLocked() {

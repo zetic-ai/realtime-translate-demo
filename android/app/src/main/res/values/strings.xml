@@ -24,7 +24,6 @@
     <string name="speech_catalog_loading">Checking installed on-device languages</string>
 
     <!-- Header and language bar -->
-    <string name="zetic_opens_settings">ZETIC, opens settings</string>
     <string name="speech_language_automatic">Automatic (device recognizer)</string>
     <string name="language_chip_accessibility">Speaker %1$s languages: reads %2$s, speaks %3$s</string>
     <string name="menu_reading_language">Reading language</string>
@@ -52,7 +51,10 @@
     <string name="bubble_destination">To %1$s - %2$s</string>
     <string name="bubble_translation_pending">Translation pending</string>
     <string name="bubble_recognizing">Recognizing speech</string>
+    <string name="bubble_listening">Listening</string>
     <string name="bubble_copy_action">Copy</string>
+    <string name="retry_translation">Retry translation</string>
+    <string name="jump_to_latest">Jump to latest</string>
     <string name="toast_copied">Copied</string>
 
     <!-- Bottom bar -->
@@ -62,23 +64,30 @@
     <string name="hint_resolve_error">Resolve the error above to continue.</string>
     <string name="hint_start_conversation">Tap Start conversation to load the translation model.</string>
     <string name="hint_other_speaker_active">Speaker %1$s cannot begin while speaker %2$s is active.</string>
-    <string name="hint_push_to_talk">Hold a button to talk, or tap once to start and again to stop.</string>
+    <string name="hint_push_to_talk">Tap a speaker button to start, then tap again to stop.</string>
     <string name="ptt_start">Start speaker %1$s</string>
     <string name="ptt_stop">Stop speaker %1$s</string>
     <string name="ptt_blocked_by_other">Speaker %1$s cannot start while speaker %2$s is active</string>
     <string name="ptt_blocked_model_not_ready">Speaker %1$s push-to-talk unlocks when the translation model is ready</string>
-    <string name="ptt_caption_idle">" - hold to talk"</string>
-    <string name="ptt_caption_recording">" recording - release to stop"</string>
+    <string name="ptt_caption_idle">" - tap to talk"</string>
+    <string name="ptt_caption_recording">" recording - tap to stop"</string>
     <string name="session_start">Start conversation</string>
     <string name="session_end">End session</string>
+    <string name="session_cancel">Cancel</string>
+    <string name="typed_input_action">Type a message</string>
+    <string name="typed_input_title">Type a message</string>
+    <string name="typed_input_speaker">Who is speaking?</string>
+    <string name="typed_input_guidance">Speaker %1$s types in %2$s. Speaker %3$s reads the translation in %4$s.</string>
+    <string name="typed_input_message">Message</string>
+    <string name="typed_input_placeholder">What speaker %1$s wants to say in %2$s</string>
+    <string name="typed_input_cancel">Cancel</string>
+    <string name="typed_input_send">Send</string>
+    <string name="audio_interrupted_notice">Audio was interrupted. Please tap the speaker button and try again.</string>
+    <string name="no_speech_notice">No speech was detected. Please try again.</string>
 
     <!-- Spoken translation -->
-    <string name="sound_on_label">Spoken translation on</string>
-    <string name="sound_off_label">Spoken translation off</string>
-    <string name="sound_on_hint">Turns spoken translation off.</string>
-    <string name="sound_off_hint">Turns spoken translation on.</string>
     <string name="replay_label">Play translation</string>
-    <string name="replay_hint">Speaks this translation again.</string>
+    <string name="replay_hint">Reads this translation aloud.</string>
 
     <!-- Settings drawer -->
     <string name="settings_title">Settings</string>
@@ -114,7 +123,7 @@
     <string name="first_run_welcome_privacy">Speech and translation run on this phone. Nothing is sent to a server.</string>
     <string name="first_run_welcome_action">Get started</string>
     <string name="first_run_priming_title">Microphone and speech</string>
-    <string name="first_run_priming_microphone">Microphone: to hear whoever is holding a button.</string>
+    <string name="first_run_priming_microphone">Microphone: to hear whoever taps a speaker button.</string>
     <string name="first_run_priming_speech">Speech recognition: to turn that audio into text.</string>
     <string name="first_run_priming_privacy">Both run on this phone. No audio and no text leave the device.</string>
     <string name="first_run_priming_next">Android asks for the microphone next.</string>

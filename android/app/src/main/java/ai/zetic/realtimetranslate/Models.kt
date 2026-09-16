@@ -68,6 +68,7 @@ data class ConversationItem(
     val transcript: String,
     val isFinal: Boolean,
     val translation: String? = null,
+    val provisionalTranslation: String? = null,
     val translationError: UiText? = null,
 )
 
@@ -84,6 +85,7 @@ data class SessionUiState(
     val backgroundDownload: ModelDownloadUiState? = null,
     val modelRemovalMessage: UiText? = null,
     val errorMessage: UiText? = null,
+    val notice: UiText? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)
 

@@ -22,7 +22,6 @@
     <string name="speech_catalog_loading">Vérification des langues installées</string>
 
     <!-- Header and language bar -->
-    <string name="zetic_opens_settings">ZETIC, ouvre les réglages</string>
     <string name="speech_language_automatic">Automatique (reconnaissance de l’appareil)</string>
     <string name="language_chip_accessibility">Langues de l’interlocuteur %1$s : lit %2$s, parle %3$s</string>
     <string name="menu_reading_language">Langue de lecture</string>
@@ -50,7 +49,10 @@
     <string name="bubble_destination">Vers %1$s - %2$s</string>
     <string name="bubble_translation_pending">Traduction en attente</string>
     <string name="bubble_recognizing">Reconnaissance en cours</string>
+    <string name="bubble_listening">Écoute en cours</string>
     <string name="bubble_copy_action">Copier</string>
+    <string name="retry_translation">Réessayer la traduction</string>
+    <string name="jump_to_latest">Aller au plus récent</string>
     <string name="toast_copied">Copié</string>
 
     <!-- Bottom bar -->
@@ -60,23 +62,30 @@
     <string name="hint_resolve_error">Corrigez l’erreur ci-dessus pour continuer.</string>
     <string name="hint_start_conversation">Touchez « Démarrer la conversation » pour charger le modèle de traduction.</string>
     <string name="hint_other_speaker_active">L’interlocuteur %1$s ne peut pas parler tant que %2$s a la parole.</string>
-    <string name="hint_push_to_talk">Maintenez un bouton pour parler, ou touchez pour lancer puis arrêter.</string>
+    <string name="hint_push_to_talk">Touchez un bouton pour parler, puis touchez-le à nouveau pour arrêter.</string>
     <string name="ptt_start">Démarrer le tour de parole de %1$s</string>
     <string name="ptt_stop">Terminer le tour de parole de %1$s</string>
     <string name="ptt_blocked_by_other">L’interlocuteur %1$s ne peut pas commencer tant que l’interlocuteur %2$s a la parole</string>
     <string name="ptt_blocked_model_not_ready">Le bouton de parole de l’interlocuteur %1$s s’active quand le modèle est prêt</string>
-    <string name="ptt_caption_idle">" - maintenir pour parler"</string>
-    <string name="ptt_caption_recording">" - enregistrement, relâcher pour arrêter"</string>
+    <string name="ptt_caption_idle">" - toucher pour parler"</string>
+    <string name="ptt_caption_recording">" - enregistrement, toucher pour arrêter"</string>
     <string name="session_start">Démarrer la conversation</string>
     <string name="session_end">Terminer la session</string>
+    <string name="session_cancel">Annuler</string>
+    <string name="typed_input_action">Saisir un message</string>
+    <string name="typed_input_title">Saisir un message</string>
+    <string name="typed_input_speaker">Qui parle ?</string>
+    <string name="typed_input_guidance">L’interlocuteur %1$s écrit en %2$s. L’interlocuteur %3$s lit la traduction en %4$s.</string>
+    <string name="typed_input_message">Message</string>
+    <string name="typed_input_placeholder">Ce que l’interlocuteur %1$s veut dire en %2$s</string>
+    <string name="typed_input_cancel">Annuler</string>
+    <string name="typed_input_send">Envoyer</string>
+    <string name="audio_interrupted_notice">Le son a été interrompu. Touchez le bouton de l’interlocuteur et réessayez.</string>
+    <string name="no_speech_notice">Aucune parole détectée. Réessayez.</string>
 
     <!-- Spoken translation -->
-    <string name="sound_on_label">Traduction vocale activée</string>
-    <string name="sound_off_label">Traduction vocale désactivée</string>
-    <string name="sound_on_hint">Désactive la traduction vocale.</string>
-    <string name="sound_off_hint">Active la traduction vocale.</string>
     <string name="replay_label">Lire la traduction</string>
-    <string name="replay_hint">Lit à nouveau cette traduction à voix haute.</string>
+    <string name="replay_hint">Lit cette traduction à voix haute.</string>
 
     <!-- Settings drawer -->
     <string name="settings_title">Réglages</string>
@@ -112,7 +121,7 @@
     <string name="first_run_welcome_privacy">Reconnaissance vocale et traduction se font sur ce téléphone. Rien n’est envoyé à un serveur.</string>
     <string name="first_run_welcome_action">Commencer</string>
     <string name="first_run_priming_title">Micro et reconnaissance vocale</string>
-    <string name="first_run_priming_microphone">Micro : pour entendre la personne qui maintient un bouton.</string>
+    <string name="first_run_priming_microphone">Micro : pour entendre la personne qui touche son bouton.</string>
     <string name="first_run_priming_speech">Reconnaissance vocale : pour transformer ce son en texte.</string>
     <string name="first_run_priming_privacy">Les deux fonctionnent sur ce téléphone. Aucun son ni aucun texte ne quitte l’appareil.</string>
     <string name="first_run_priming_next">Android vous demandera ensuite le micro.</string>

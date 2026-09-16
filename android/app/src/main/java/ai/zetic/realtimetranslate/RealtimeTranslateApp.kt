@@ -1,6 +1,7 @@
 package ai.zetic.realtimetranslate
 
 import android.content.Context
+import android.content.res.Resources
 import com.zeticai.mlange.core.background.BackgroundDownloadState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -9,13 +10,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,33 +26,45 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -67,6 +81,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlin.math.max
 
 sealed interface UiAction {
     data object RequestPermission : UiAction
@@ -76,10 +93,13 @@ sealed interface UiAction {
     data object RemoveDownloadedModel : UiAction
     data object StartConversation : UiAction
     data object EndSession : UiAction
+    data object CancelModelPreparation : UiAction
     data object ClearConversation : UiAction
     data class PttPress(val speaker: Speaker) : UiAction
     data class PttRelease(val speaker: Speaker) : UiAction
     data class TogglePtt(val speaker: Speaker) : UiAction
+    data class SubmitTyped(val text: String, val speaker: Speaker) : UiAction
+    data class RetryTranslation(val id: String) : UiAction
     data object Retry : UiAction
 }
 
@@ -91,10 +111,13 @@ fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RemoveDownloadedModel -> SessionAction.RemoveDownloadedModel(context)
     UiAction.StartConversation -> SessionAction.StartConversation(context)
     UiAction.EndSession -> SessionAction.EndSession
+    UiAction.CancelModelPreparation -> SessionAction.CancelModelPreparation
     UiAction.ClearConversation -> SessionAction.ClearConversation
     is UiAction.PttPress -> SessionAction.PttPress(context, speaker)
     is UiAction.PttRelease -> SessionAction.PttRelease(speaker)
     is UiAction.TogglePtt -> SessionAction.TogglePtt(context, speaker)
+    is UiAction.SubmitTyped -> SessionAction.SubmitTyped(text, speaker)
+    is UiAction.RetryTranslation -> SessionAction.RetryTranslation(id)
     UiAction.Retry -> SessionAction.Retry
 }
 
@@ -129,123 +152,86 @@ fun RealtimeTranslateApp(
     onOpenSettingsDrawer: () -> Unit = {},
     onCopyBubble: (ConversationItem) -> Unit = {},
     copyToast: ToastState? = null,
-    isMuted: Boolean = false,
-    onToggleMute: () -> Unit = {},
     onReplayBubble: (ConversationItem) -> Unit = {},
 ) {
+    var typedInput by remember { mutableStateOf<TypedInputDraft?>(null) }
+    var lastTypedSpeaker by remember { mutableStateOf(Speaker.A) }
     Column(
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
-        Header(state, onOpenSettingsDrawer, isMuted, onToggleMute)
+        Header(state, onOpenSettingsDrawer)
         LanguageBar(state, onAction)
         SessionBanner(state, onAction, onOpenAppSettings)
         // The copy confirmation is anchored to the bottom of the transcript rather than the bottom
         // of the screen, so it never lands on top of the push-to-talk row or the session action.
         Box(Modifier.weight(1f)) {
-            ConversationList(state, Modifier.fillMaxSize(), onCopyBubble, isMuted, onReplayBubble)
+            ConversationList(state, Modifier.fillMaxSize(), onCopyBubble, onReplayBubble, onAction)
             copyToast?.let { ToastHost(it, Modifier.align(Alignment.BottomCenter)) }
         }
-        BottomBar(state, onAction)
+        BottomBar(state, onAction) { typedInput = TypedInputDraft(speaker = lastTypedSpeaker) }
+    }
+    typedInput?.let { draft ->
+        TypedInputSheet(
+            draft = draft,
+            state = state,
+            onChange = {
+                typedInput = it
+                lastTypedSpeaker = it.speaker
+            },
+            onDismiss = { typedInput = null },
+            onSend = { text, speaker ->
+                lastTypedSpeaker = speaker
+                onAction(UiAction.SubmitTyped(text, speaker))
+                typedInput = null
+            },
+        )
     }
 }
 
-@Composable private fun Header(
-    state: SessionUiState,
-    onOpenSettingsDrawer: () -> Unit,
-    isMuted: Boolean,
-    onToggleMute: () -> Unit,
-) {
+@Composable private fun Header(state: SessionUiState, onOpenSettingsDrawer: () -> Unit) {
     val status = statusLabel(state).text()
     val statusAccessibility = stringResource(R.string.status_accessibility, status)
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth().height(48.dp)) {
+            Image(
+                painterResource(R.drawable.zetic_logo),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.height(16.dp).align(Alignment.CenterStart),
+            )
             Text(
                 FirstRunCopy.PRODUCT_NAME,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.align(Alignment.Center),
             )
-            ZeticWordmarkButton(onOpenSettingsDrawer)
+            val settingsLabel = stringResource(R.string.settings_title)
+            IconButton(
+                onClick = onOpenSettingsDrawer,
+                modifier = Modifier.size(48.dp).align(Alignment.CenterEnd).semantics {
+                    contentDescription = settingsLabel
+                    role = Role.Button
+                },
+            ) {
+                Icon(painterResource(R.drawable.ic_menu), null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+            }
         }
-        // The status strip is one short line with its whole trailing half empty, so the app's only
-        // always-present control lands there without crowding the header or adding a row of chrome.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                status,
-                color = TextSecondary,
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = statusAccessibility },
-            )
-            SoundToggle(isMuted, onToggleMute)
-        }
+        Text(
+            status,
+            color = TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.semantics { contentDescription = statusAccessibility },
+        )
         if (state.speechLanguageCatalogLoading) {
             Text(stringResource(R.string.speech_catalog_loading), color = TextSecondary, fontSize = 12.sp)
         }
         state.speechLanguageCatalogMessage?.let { Text(it.text(), color = TextSecondary, fontSize = 12.sp) }
     }
     HorizontalDivider(color = DividerLine)
-}
-
-/**
- * The one sound control: a speaker glyph when sound is on, a crossed-out speaker when it is off.
- * The glyph is its whole face, so the state is announced in words rather than left to the icon.
- */
-@Composable private fun SoundToggle(isMuted: Boolean, onToggle: () -> Unit) {
-    // The label is the state in words, so the control needs no separate state description: an
-    // Android switch would announce its own `on` after a label that already said which it is.
-    val label = stringResource(if (isMuted) R.string.sound_off_label else R.string.sound_on_label)
-    IconButton(
-        onClick = onToggle,
-        modifier = Modifier.size(28.dp).semantics(mergeDescendants = true) {
-            contentDescription = label
-            role = Role.Button
-        },
-    ) {
-        Icon(
-            painterResource(if (isMuted) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
-            contentDescription = null,
-            tint = if (isMuted) TextSecondary else Accent,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-/**
- * The official ZETIC logo lockup, from `res/drawable-nodpi/zetic_logo.png`, as the control that
- * opens the settings drawer. The chevron is the only affordance that says the lockup is tappable.
- */
-@Composable private fun ZeticWordmarkButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .clip(ControlShape)
-            .clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) {
-                contentDescription = "ZETIC, opens settings"
-                role = Role.Button
-            }
-            .padding(horizontal = 6.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Image(
-            painterResource(R.drawable.zetic_logo),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.height(16.dp),
-        )
-        Icon(
-            Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = TextSecondary,
-            modifier = Modifier.size(14.dp),
-        )
-    }
 }
 
 /** Language chips can be changed at any time except while an utterance is in flight. */
@@ -282,7 +268,10 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 ) {
     val settings = state.settingsFor(speaker)
     val enabled = canEditLanguages(state)
-    val reading = settings.readingLanguage.displayName
+    val configuration = LocalConfiguration.current
+    val locale = configuration.locales[0] ?: Locale.getDefault()
+    val deviceLanguageCode = Resources.getSystem().configuration.locales[0]?.language
+    val reading = settings.readingLanguage.localizedName(locale)
     val speaking = shortLanguageName(settings.inputLanguage)
     val chipAccessibility = stringResource(R.string.language_chip_accessibility, speaker.label, reading, speaking)
     var expanded by remember { mutableStateOf(false) }
@@ -315,15 +304,26 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
             MenuSectionHeader(stringResource(R.string.menu_reading_language))
-            HyMt2Languages.all.forEach { language ->
+            LanguageMenuOrdering.order(
+                candidates = HyMt2Languages.all,
+                pinned = listOf(settings.readingLanguage, state.settingsFor(speaker.other()).readingLanguage),
+                deviceLanguageCode = deviceLanguageCode,
+                locale = locale,
+            ).forEach { language ->
                 DropdownMenuItem(
-                    text = { Text(language.displayName) },
+                    text = { Text(language.localizedName(locale)) },
                     onClick = { expanded = false; onAction(UiAction.SelectReading(speaker, language)) },
                 )
             }
             HorizontalDivider(color = DividerLine)
             MenuSectionHeader(stringResource(R.string.menu_spoken_language))
-            state.speechLanguages.forEach { language ->
+            SpeechLanguageMenuOrdering.order(
+                candidates = state.speechLanguages,
+                pinned = listOf(settings.inputLanguage, state.settingsFor(speaker.other()).inputLanguage),
+                deviceLanguageCode = deviceLanguageCode,
+                automaticName = stringResource(R.string.speech_language_automatic),
+                locale = locale,
+            ).forEach { language ->
                 DropdownMenuItem(
                     text = { Text(language.displayName.text()) },
                     onClick = { expanded = false; onAction(UiAction.SelectInput(speaker, language)) },
@@ -362,6 +362,8 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
                 trackColor = DividerLine,
             )
             Text(stringResource(R.string.banner_model_download_wait), color = TextSecondary, fontSize = 12.sp)
+            val cancel = stringResource(R.string.session_cancel)
+            BannerAction(cancel, cancel) { onAction(UiAction.CancelModelPreparation) }
         }
         state.backgroundDownload?.state in setOf(BackgroundDownloadState.FAILED, BackgroundDownloadState.STOPPED) -> Banner {
             Text(
@@ -398,6 +400,8 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
                 trackColor = DividerLine,
             )
             Text(stringResource(R.string.banner_controls_unlock), color = TextSecondary, fontSize = 12.sp)
+            val cancel = stringResource(R.string.session_cancel)
+            BannerAction(cancel, cancel) { onAction(UiAction.CancelModelPreparation) }
         }
         SessionPhase.ModelLoadFailed -> Banner {
             Text(
@@ -413,7 +417,9 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             val tryAgain = stringResource(R.string.banner_try_again)
             BannerAction(tryAgain, tryAgain) { onAction(UiAction.Retry) }
         }
-        else -> Unit
+        else -> state.notice?.let { notice -> Banner {
+            Text(notice.text(), color = TextSecondary, fontSize = 14.sp)
+        } }
         }
     }
 }
@@ -441,31 +447,133 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     state: SessionUiState,
     modifier: Modifier,
     onCopyBubble: (ConversationItem) -> Unit,
-    isMuted: Boolean,
     onReplayBubble: (ConversationItem) -> Unit,
+    onAction: (UiAction) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(state.conversations.size) {
-        if (state.conversations.isNotEmpty()) listState.animateScrollToItem(state.conversations.lastIndex)
+    val density = LocalDensity.current
+    val touchExplorationEnabled = rememberTouchExplorationEnabled()
+    val scope = rememberCoroutineScope()
+    var follow by remember { mutableStateOf(ConversationFollow()) }
+    var previousState by remember { mutableStateOf(state) }
+    var programmaticScroll by remember { mutableStateOf(false) }
+
+    suspend fun scrollToLatest() {
+        if (state.conversations.isEmpty()) return
+        programmaticScroll = true
+        try {
+            listState.animateScrollToItem(state.conversations.size)
+        } finally {
+            programmaticScroll = false
+        }
     }
-    LazyColumn(
-        modifier.fillMaxWidth(),
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(16.dp),
-    ) {
-        if (state.conversations.isEmpty()) {
-            item {
-                val hint = stringResource(
-                    if (state.conversationStarted) R.string.transcript_empty_live else R.string.transcript_empty_idle,
+
+    LaunchedEffect(state.conversations) {
+        val (next, effect) = follow.contentChanged(
+            isEmpty = state.conversations.isEmpty(),
+            isTouchExplorationEnabled = touchExplorationEnabled,
+        )
+        follow = next
+        if (effect == ConversationFollow.Effect.ScrollToLatest) scrollToLatest()
+    }
+    LaunchedEffect(state.phase, state.conversationStarted) {
+        if (ConversationSnapMoment.shouldSnap(previousState, state)) {
+            follow = follow.snapToLatest().first
+            scrollToLatest()
+        }
+        previousState = state
+    }
+    LaunchedEffect(listState, density) {
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()
+            val distance = when {
+                layout.totalItemsCount == 0 -> 0f
+                last == null || last.index < layout.totalItemsCount - 1 -> Float.MAX_VALUE
+                else -> max(0, last.offset + last.size - layout.viewportEndOffset).toFloat()
+            }
+            Triple(listState.isScrollInProgress, programmaticScroll, distance / density.density)
+        }.collect { (scrolling, programmatic, distanceDp) ->
+            if (scrolling && !programmatic) follow = follow.observeDistanceFromBottom(distanceDp)
+        }
+    }
+
+    Box(modifier.fillMaxWidth()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(16.dp),
+        ) {
+            if (state.conversations.isEmpty() && state.phase !in setOf(
+                    SessionPhase.PermissionRequired,
+                    SessionPhase.LoadingModel,
+                    SessionPhase.ModelLoadFailed,
+                    SessionPhase.Error,
                 )
-                Text(hint, color = TextSecondary, fontSize = 14.sp)
+            ) {
+                item {
+                    val hint = stringResource(
+                        if (state.conversationStarted) R.string.transcript_empty_live else R.string.transcript_empty_idle,
+                    )
+                    Text(hint, color = TextSecondary, fontSize = 14.sp)
+                }
+            }
+            items(state.conversations, key = { it.id }) { item ->
+                MessageBubble(
+                    item,
+                    onCopyBubble,
+                    state.isRecognizerLive,
+                    state.phase == SessionPhase.Ready,
+                    onReplayBubble,
+                    onAction,
+                )
+            }
+            if (state.conversations.isNotEmpty()) {
+                item(key = CONVERSATION_BOTTOM_TAG) {
+                    Spacer(Modifier.height(1.dp).testTag(CONVERSATION_BOTTOM_TAG))
+                }
             }
         }
-        items(state.conversations, key = { it.id }) {
-            MessageBubble(it, onCopyBubble, isMuted, state.isRecognizerLive, onReplayBubble)
+        if (follow.showsJumpControl) {
+            val label = stringResource(R.string.jump_to_latest)
+            IconButton(
+                onClick = {
+                    follow = follow.snapToLatest().first
+                    scope.launch { scrollToLatest() }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Surface)
+                    .border(1.dp, DividerLine, CircleShape)
+                    .semantics { contentDescription = label },
+            ) {
+                Icon(painterResource(R.drawable.ic_chevron_down), null, tint = TextPrimary)
+            }
         }
     }
+}
+
+internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
+
+@Composable private fun rememberTouchExplorationEnabled(): Boolean {
+    val context = LocalContext.current
+    val manager = remember(context) {
+        context.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+    }
+    var enabled by remember(manager) { mutableStateOf(manager?.isTouchExplorationEnabled == true) }
+    DisposableEffect(manager) {
+        if (manager == null) return@DisposableEffect onDispose { }
+        val listener = android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener {
+            enabled = it
+        }
+        manager.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return enabled
 }
 
 /**
@@ -477,22 +585,22 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 @Composable private fun MessageBubble(
     item: ConversationItem,
     onCopyBubble: (ConversationItem) -> Unit,
-    isMuted: Boolean,
     isRecognizerLive: Boolean,
+    canRetry: Boolean,
     onReplayBubble: (ConversationItem) -> Unit,
+    onAction: (UiAction) -> Unit,
 ) {
     val isA = item.speaker == Speaker.A
     var menuExpanded by remember { mutableStateOf(false) }
     val copyable = item.copyableText != null
     val copyAction = stringResource(R.string.bubble_copy_action)
     val bubbleAccessibility = stringResource(R.string.bubble_accessibility, item.speaker.label)
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isA) Arrangement.Start else Arrangement.End,
-    ) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val bubbleMaxWidth = (maxWidth - 64.dp).coerceAtLeast(1.dp)
         Column(
             Modifier
-                .fillMaxWidth(0.88f)
+                .align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
+                .widthIn(max = bubbleMaxWidth)
                 .clip(MessageShape)
                 .background(speakerTint(item.speaker))
                 .combinedClickable(
@@ -517,29 +625,55 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(item.transcript, fontSize = 16.sp, color = TextPrimary)
-            HorizontalDivider(color = DividerLine)
             Text(
-                stringResource(R.string.bubble_destination, item.speaker.other().label, item.targetLanguage.displayName),
+                item.transcript.ifBlank { stringResource(R.string.bubble_listening) },
+                fontSize = 16.sp,
+                color = if (item.transcript.isBlank()) TextSecondary else TextPrimary,
+            )
+            Text(
+                stringResource(
+                    R.string.bubble_destination,
+                    item.speaker.other().label,
+                    item.targetLanguage.localizedName(LocalConfiguration.current.locales[0] ?: Locale.getDefault()),
+                ),
                 color = TextSecondary,
                 fontSize = 12.sp,
             )
             // The replay control sits in the bottom trailing corner of the translation region, as a
             // separate element from the bubble, so the bubble's own label and its copy long press
             // are unchanged.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Box(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(
+                    Modifier.widthIn(max = (bubbleMaxWidth - 36.dp).coerceAtLeast(1.dp)),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     when {
                         item.translation != null ->
                             Text(item.translation, fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                        item.translationError != null -> Text(item.translationError.text(), color = Error, fontSize = 12.sp)
+                        item.translationError != null -> {
+                            Text(item.translationError.text(), color = Error, fontSize = 12.sp)
+                            if (!isRecognizerLive) {
+                                TextButton(
+                                    onClick = { onAction(UiAction.RetryTranslation(item.id)) },
+                                    enabled = canRetry,
+                                ) {
+                                    Text(stringResource(R.string.retry_translation))
+                                }
+                            }
+                        }
                         item.isFinal -> Text(stringResource(R.string.bubble_translation_pending), color = TextSecondary, fontSize = 12.sp)
                         else -> Text(stringResource(R.string.bubble_recognizing), color = TextSecondary, fontSize = 12.sp)
+                    }
+                    item.provisionalTranslation?.let {
+                        Text(it, color = TextSecondary, fontSize = 14.sp)
                     }
                 }
                 if (ReplayControl.isPresent(item)) {
                     ReplayButton(
-                        enabled = ReplayControl.isEnabled(item, isMuted, isRecognizerLive),
+                        enabled = ReplayControl.isEnabled(item, isRecognizerLive),
                         onClick = { onReplayBubble(item) },
                     )
                 }
@@ -573,7 +707,11 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     }
 }
 
-@Composable private fun BottomBar(state: SessionUiState, onAction: (UiAction) -> Unit) {
+@Composable private fun BottomBar(
+    state: SessionUiState,
+    onAction: (UiAction) -> Unit,
+    onOpenTypedInput: () -> Unit,
+) {
     HorizontalDivider(color = DividerLine)
     Column(
         Modifier.fillMaxWidth().padding(16.dp),
@@ -583,7 +721,17 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             PttControl(Speaker.A, state, onAction, Modifier.weight(1f))
             PttControl(Speaker.B, state, onAction, Modifier.weight(1f))
         }
-        Text(bottomHint(state).text(), color = TextSecondary, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(bottomHint(state).text(), color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            val typedLabel = stringResource(R.string.typed_input_action)
+            IconButton(
+                onClick = onOpenTypedInput,
+                enabled = state.conversationStarted && state.phase == SessionPhase.Ready,
+                modifier = Modifier.size(48.dp).semantics { contentDescription = typedLabel },
+            ) {
+                Icon(painterResource(R.drawable.ic_keyboard), null, tint = TextSecondary)
+            }
+        }
         SessionButton(state, onAction)
     }
 }
@@ -642,20 +790,10 @@ private fun bottomHint(state: SessionUiState): UiText {
             .clip(ControlShape)
             .background(container)
             .border(1.dp, borderColor, ControlShape)
+            .clickable(enabled = enabled) { onAction(UiAction.TogglePtt(speaker)) }
             .semantics(mergeDescendants = true) {
                 contentDescription = if (enabled) actionLabel else blockedLabel
-                if (enabled) onClick { onAction(UiAction.TogglePtt(speaker)); true } else disabled()
-            }
-            .pointerInput(enabled, listening) {
-                if (enabled) {
-                    detectTapGestures(
-                        onPress = {
-                            onAction(UiAction.PttPress(speaker))
-                            tryAwaitRelease()
-                            onAction(UiAction.PttRelease(speaker))
-                        },
-                    )
-                }
+                if (!enabled) disabled()
             }
             .padding(vertical = 16.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center,
@@ -673,7 +811,16 @@ private fun bottomHint(state: SessionUiState): UiText {
 @Composable private fun SessionButton(state: SessionUiState, onAction: (UiAction) -> Unit) {
     val endLabel = stringResource(R.string.session_end)
     val startLabel = stringResource(R.string.session_start)
-    if (state.conversationStarted) {
+    val cancelLabel = stringResource(R.string.session_cancel)
+    if (state.backgroundDownload?.isActive == true || state.phase == SessionPhase.LoadingModel) {
+        OutlinedButton(
+            onClick = { onAction(UiAction.CancelModelPreparation) },
+            shape = ControlShape,
+            border = BorderStroke(1.dp, DividerLine),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = cancelLabel },
+        ) { Text(cancelLabel, fontSize = 14.sp) }
+    } else if (state.conversationStarted) {
         OutlinedButton(
             onClick = { onAction(UiAction.EndSession) },
             shape = ControlShape,
@@ -694,5 +841,82 @@ private fun bottomHint(state: SessionUiState): UiText {
             ),
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = startLabel },
         ) { Text(startLabel, fontSize = 14.sp) }
+    }
+}
+
+private data class TypedInputDraft(
+    val speaker: Speaker = Speaker.A,
+    val text: String = "",
+) {
+    val trimmedText: String get() = text.trim()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun TypedInputSheet(
+    draft: TypedInputDraft,
+    state: SessionUiState,
+    onChange: (TypedInputDraft) -> Unit,
+    onDismiss: () -> Unit,
+    onSend: (String, Speaker) -> Unit,
+) {
+    val settings = state.settingsFor(draft.speaker)
+    val counterpart = state.settingsFor(draft.speaker.other())
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.typed_input_title), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.typed_input_speaker), color = TextSecondary, fontSize = 12.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Speaker.entries.forEach { speaker ->
+                    OutlinedButton(
+                        onClick = { onChange(draft.copy(speaker = speaker)) },
+                        border = BorderStroke(1.dp, if (draft.speaker == speaker) speakerAccent(speaker) else DividerLine),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (draft.speaker == speaker) speakerTint(speaker) else Surface,
+                            contentColor = TextPrimary,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    ) { Text(speaker.label) }
+                }
+            }
+            Text(
+                stringResource(
+                    R.string.typed_input_guidance,
+                    draft.speaker.label,
+                    settings.readingLanguage.localizedName(locale),
+                    draft.speaker.other().label,
+                    counterpart.readingLanguage.localizedName(locale),
+                ),
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
+            OutlinedTextField(
+                value = draft.text,
+                onValueChange = { onChange(draft.copy(text = it)) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).focusRequester(focusRequester),
+                label = { Text(stringResource(R.string.typed_input_message)) },
+                placeholder = {
+                    Text(
+                        stringResource(
+                            R.string.typed_input_placeholder,
+                            draft.speaker.label,
+                            settings.readingLanguage.localizedName(locale),
+                        ),
+                    )
+                },
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.typed_input_cancel)) }
+                TextButton(
+                    onClick = { onSend(draft.trimmedText, draft.speaker) },
+                    enabled = draft.trimmedText.isNotEmpty() && state.conversationStarted && state.phase == SessionPhase.Ready,
+                ) { Text(stringResource(R.string.typed_input_send)) }
+            }
+        }
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 sealed interface SessionAction {
     data class PermissionChanged(val granted: Boolean, val permanentlyDenied: Boolean = false) : SessionAction
     data class RefreshSpeechLanguages(val context: Context) : SessionAction
+    data class RestoreLanguagePreferences(val context: Context) : SessionAction
     data class InputLanguageChanged(val speaker: Speaker, val language: SpeechLanguage) : SessionAction
     data class ReadingLanguageChanged(val speaker: Speaker, val language: TranslationLanguage) : SessionAction
     data class PrepareBackgroundDownload(val context: Context) : SessionAction
@@ -24,10 +25,13 @@ sealed interface SessionAction {
     data class RemoveDownloadedModel(val context: Context) : SessionAction
     data class StartConversation(val context: Context) : SessionAction
     data object EndSession : SessionAction
+    data object CancelModelPreparation : SessionAction
     data object ClearConversation : SessionAction
     data class PttPress(val context: Context, val speaker: Speaker) : SessionAction
     data class PttRelease(val speaker: Speaker) : SessionAction
     data class TogglePtt(val context: Context, val speaker: Speaker) : SessionAction
+    data class SubmitTyped(val text: String, val speaker: Speaker) : SessionAction
+    data class RetryTranslation(val id: String) : SessionAction
     data object Retry : SessionAction
 }
 
@@ -35,18 +39,33 @@ class SessionViewModel(
     private val transcriberFactory: (Context) -> SpeechTranscriber = { AndroidOnDeviceSpeechTranscriber(it) },
     private val translator: HyMt2Translator = MelangeHyMt2Translator(BuildConfig.MELANGE_PERSONAL_KEY),
     private val speechLanguageCatalog: SpeechLanguageCatalog = AndroidSpeechLanguageCatalog,
+    languagePreferences: LanguagePreferenceStore? = null,
+    private val audioInterruptionFactory: (Context) -> RecordingAudioInterruption = { AndroidRecordingAudioInterruption(it) },
     initialState: SessionUiState = SessionUiState(SessionPhase.PermissionRequired),
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(initialState)
     val state: StateFlow<SessionUiState> = mutableState.asStateFlow()
     private var transcriber: SpeechTranscriber? = null
+    private var recordingAudio: RecordingAudioInterruption? = null
     private var applicationContext: Context? = null
     private var backgroundDownloader: HyMt2BackgroundDownload? = null
     private var backgroundDownloadRequest: Job? = null
     private var backgroundDownloadPoll: Job? = null
+    private var modelLoadJob: Job? = null
+    private var translationJob: Job? = null
+    private var partialTranslationJob: Job? = null
     private val backgroundDownloadGeneration = AtomicLong()
     private val backgroundDownloadStateLock = Any()
+    private val modelLoadGeneration = AtomicLong()
+    private val modelLoadStateLock = Any()
+    private val translationGeneration = AtomicLong()
     private val modelRemovalInProgress = AtomicBoolean()
+    private var languagePreferences: LanguagePreferenceStore? = languagePreferences
+    private var storedSpokenTags: Map<Speaker, String?> = emptyMap()
+    private var activeItemId: String? = null
+    private var nextItemId = initialState.conversations.size.toLong()
+    private var partialRevision = 0L
+    private var appliedPartialRevision = 0L
 
     fun dispatch(action: SessionAction) = when (action) {
         is SessionAction.PermissionChanged -> mutableState.value = mutableState.value.copy(
@@ -55,6 +74,7 @@ class SessionViewModel(
             errorMessage = null,
         )
         is SessionAction.RefreshSpeechLanguages -> refreshSpeechLanguages(action.context)
+        is SessionAction.RestoreLanguagePreferences -> restoreLanguagePreferences(action.context)
         is SessionAction.InputLanguageChanged -> updateSettings(action.speaker) { it.copy(inputLanguage = action.language) }
         is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) {
             alignInputLanguage(it.copy(readingLanguage = action.language), mutableState.value.speechLanguages)
@@ -64,16 +84,35 @@ class SessionViewModel(
         is SessionAction.RemoveDownloadedModel -> removeDownloadedModel(action.context)
         is SessionAction.StartConversation -> loadModel(action.context)
         SessionAction.EndSession -> endSession()
+        SessionAction.CancelModelPreparation -> cancelModelPreparation()
         SessionAction.ClearConversation -> clearConversation()
         is SessionAction.PttPress -> start(action.context, action.speaker)
         is SessionAction.PttRelease -> stop(action.speaker)
         is SessionAction.TogglePtt -> toggle(action.context, action.speaker)
+        is SessionAction.SubmitTyped -> submitTyped(action.text, action.speaker)
+        is SessionAction.RetryTranslation -> retryTranslation(action.id)
         SessionAction.Retry -> retry()
     }
 
     private fun updateSettings(speaker: Speaker, transform: (SpeakerSettings) -> SpeakerSettings) {
         val current = mutableState.value
-        mutableState.value = current.copy(settings = current.settings + (speaker to transform(current.settingsFor(speaker))))
+        val updated = transform(current.settingsFor(speaker))
+        mutableState.value = current.copy(settings = current.settings + (speaker to updated))
+        languagePreferences?.setReadingCode(speaker, updated.readingLanguage.code)
+        languagePreferences?.setSpokenTag(speaker, updated.inputLanguage.preferenceTag)
+    }
+
+    private fun restoreLanguagePreferences(context: Context) {
+        val store = languagePreferences ?: AndroidLanguagePreferences(context).also { languagePreferences = it }
+        storedSpokenTags = Speaker.entries.associateWith(store::spokenTag)
+        val current = mutableState.value
+        val restored = current.settings.mapValues { (speaker, settings) ->
+            val reading = store.readingCode(speaker)
+                ?.let { code -> HyMt2Languages.all.firstOrNull { it.code == code } }
+                ?: settings.readingLanguage
+            settings.copy(readingLanguage = reading)
+        }
+        mutableState.value = current.copy(settings = restored)
     }
 
     /**
@@ -95,10 +134,24 @@ class SessionViewModel(
             // The catalog arriving is the first moment a spoken language can be derived at all, so
             // it stands in for init here. A speaker who has explicitly picked a spoken language is
             // left alone; that override survives until their reading language changes again.
-            val aligned = current.settings.mapValues { (_, settings) ->
-                if (settings.inputLanguage == SpeechLanguage.Automatic) alignInputLanguage(settings, validLanguages) else settings
+            val aligned = current.settings.mapValues { (speaker, settings) ->
+                val stored = when (val tag = storedSpokenTags[speaker]) {
+                    SpeechLanguage.Automatic.preferenceTag -> SpeechLanguage.Automatic
+                    null -> null
+                    else -> validLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                        .firstOrNull { it.languageTag == tag }
+                }
+                when {
+                    stored != null -> settings.copy(inputLanguage = stored)
+                    settings.inputLanguage == SpeechLanguage.Automatic -> alignInputLanguage(settings, validLanguages)
+                    else -> settings
+                }
             }
             mutableState.value = current.copy(settings = aligned, speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
+            aligned.forEach { (speaker, settings) ->
+                languagePreferences?.setReadingCode(speaker, settings.readingLanguage.code)
+                languagePreferences?.setSpokenTag(speaker, settings.inputLanguage.preferenceTag)
+            }
         }
     }
 
@@ -214,8 +267,11 @@ class SessionViewModel(
     /** The SDK has finished its durable transfer, so the existing runtime initialization can run. */
     private fun loadInstalledModel(downloadGeneration: Long? = null) {
         val context = applicationContext ?: return
+        if (mutableState.value.phase !in setOf(SessionPhase.Ready, SessionPhase.ModelLoadFailed)) return
+        if (downloadGeneration != null && !isCurrentBackgroundDownload(downloadGeneration)) return
+        val loadGeneration = invalidateModelLoadWork()
         var modelLoadStarted = false
-        runForCurrentBackgroundDownload(downloadGeneration) {
+        runForCurrentModelLoad(loadGeneration, downloadGeneration) {
             val current = mutableState.value
             if (current.phase in setOf(SessionPhase.Ready, SessionPhase.ModelLoadFailed)) {
                 mutableState.value = current.copy(phase = SessionPhase.LoadingModel, errorMessage = null, modelLoadProgress = 0f)
@@ -223,24 +279,40 @@ class SessionViewModel(
             }
         }
         if (!modelLoadStarted) return
-        viewModelScope.launch {
+        modelLoadJob = viewModelScope.launch {
             runCatching {
                 translator.load(context, loadProgress@{ progress ->
-                    runForCurrentBackgroundDownload(downloadGeneration) {
+                    runForCurrentModelLoad(loadGeneration, downloadGeneration) {
                         mutableState.value = mutableState.value.copy(modelLoadProgress = progress.coerceIn(0f, 1f))
                     }
                 })
             }.onSuccess {
-                runForCurrentBackgroundDownload(downloadGeneration) {
+                runForCurrentModelLoad(loadGeneration, downloadGeneration) {
                     mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = true, modelLoadProgress = 1f)
                 }
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
-                runForCurrentBackgroundDownload(downloadGeneration) {
+                runForCurrentModelLoad(loadGeneration, downloadGeneration) {
                     mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.asUiText(R.string.error_model_load_failed))
                 }
             }
         }
+    }
+
+    private fun cancelModelPreparation() {
+        val current = mutableState.value
+        if (current.phase != SessionPhase.LoadingModel && current.backgroundDownload?.isActive != true) return
+        invalidateModelLoadWork()
+        val downloader = backgroundDownloader
+        invalidateBackgroundDownloadWork()
+        mutableState.value = current.copy(
+            phase = SessionPhase.Ready,
+            conversationStarted = false,
+            backgroundDownload = null,
+            modelLoadProgress = 0f,
+            errorMessage = null,
+        )
+        if (downloader != null) viewModelScope.launch { runCatching { downloader.cancel() } }
     }
 
     private fun removeDownloadedModel(context: Context) {
@@ -310,13 +382,51 @@ class SessionViewModel(
         }
     }
 
+    private fun invalidateModelLoadWork(): Long = synchronized(modelLoadStateLock) {
+        val generation = modelLoadGeneration.incrementAndGet()
+        modelLoadJob?.cancel()
+        modelLoadJob = null
+        generation
+    }
+
+    private fun runForCurrentModelLoad(
+        loadGeneration: Long,
+        downloadGeneration: Long?,
+        update: () -> Unit,
+    ) = synchronized(modelLoadStateLock) {
+        if (modelLoadGeneration.get() == loadGeneration) {
+            runForCurrentBackgroundDownload(downloadGeneration, update)
+        }
+    }
+
     private fun start(context: Context, speaker: Speaker) {
         val current = mutableState.value
         if (!current.conversationStarted || current.phase != SessionPhase.Ready) return
+        val audio = audioInterruptionFactory(context.applicationContext)
+        if (!audio.start(::handleAudioInterruption)) {
+            mutableState.value = current.copy(notice = UiText.res(R.string.audio_interrupted_notice))
+            return
+        }
+        recordingAudio?.stop()
+        recordingAudio = audio
         val newTranscriber = transcriberFactory(context.applicationContext)
         transcriber?.destroy()
         transcriber = newTranscriber
-        mutableState.value = current.copy(phase = finalizingPhase(speaker), errorMessage = null)
+        val item = ConversationItem(
+            id = "transcript-${nextItemId++}",
+            speaker = speaker,
+            sourceLanguage = current.settingsFor(speaker).inputLanguage,
+            targetLanguage = current.settingsFor(speaker.other()).readingLanguage,
+            transcript = "",
+            isFinal = false,
+        )
+        activeItemId = item.id
+        mutableState.value = current.copy(
+            phase = finalizingPhase(speaker),
+            conversations = current.conversations + item,
+            errorMessage = null,
+            notice = null,
+        )
         when (val result = newTranscriber.start(current.settingsFor(speaker).inputLanguage, transcriptListener(speaker, newTranscriber))) {
             SpeechStartResult.Started -> listening(speaker, newTranscriber)
             is SpeechStartResult.Failed -> fail(result.message)
@@ -342,6 +452,8 @@ class SessionViewModel(
         override fun onStopped() {
             if (transcriber !== owner) return
             owner.destroy()
+            recordingAudio?.stop()
+            recordingAudio = null
             finalize(speaker, owner)
         }
         override fun onError(message: UiText) = fail(message, owner)
@@ -350,13 +462,38 @@ class SessionViewModel(
     private fun updateTranscript(speaker: Speaker, transcript: String, isFinal: Boolean, owner: SpeechTranscriber) {
         val current = mutableState.value
         if (transcriber !== owner || current.activeSpeaker() != speaker) return
-        val pending = current.conversations.lastOrNull()?.takeIf { it.speaker == speaker && !it.isFinal }
-        val item = ConversationItem(
-            id = pending?.id ?: "transcript-${current.conversations.size}", speaker = speaker,
-            sourceLanguage = current.settingsFor(speaker).inputLanguage, targetLanguage = current.settingsFor(speaker.other()).readingLanguage,
-            transcript = transcript, isFinal = isFinal,
+        val id = activeItemId ?: return
+        val existing = current.conversations.firstOrNull { it.id == id } ?: return
+        val item = existing.copy(
+            transcript = transcript,
+            isFinal = isFinal,
+            // Keep the last valid translation visible while the debounce/model pass catches up.
+            // The pass still carries its source text and revision, so a stale result cannot land.
+            provisionalTranslation = existing.provisionalTranslation,
         )
-        mutableState.value = current.copy(conversations = if (pending == null) current.conversations + item else current.conversations.dropLast(1) + item)
+        mutableState.value = current.copy(conversations = current.conversations.map { if (it.id == id) item else it })
+        if (!isFinal && transcript.isNotBlank()) schedulePartialTranslation(item)
+    }
+
+    private fun schedulePartialTranslation(item: ConversationItem) {
+        val revision = ++partialRevision
+        val pass = PartialTranslationPass(item.id, revision, item.transcript)
+        partialTranslationJob?.cancel()
+        partialTranslationJob = viewModelScope.launch {
+            delay(PARTIAL_TRANSLATION_DEBOUNCE_MILLIS)
+            val prompt = HyMt2TranslationRequestBuilder.build(pass.sourceText, item.targetLanguage)
+            val translated = runCatching { translator.translate(prompt) }.getOrNull()?.trim().orEmpty()
+            if (translated.isEmpty()) return@launch
+            val current = mutableState.value
+            val currentItem = current.conversations.firstOrNull { it.id == pass.itemId }
+            if (!LivePartialTranslationGuard.shouldApply(pass, activeItemId, currentItem, appliedPartialRevision)) return@launch
+            appliedPartialRevision = pass.revision
+            mutableState.value = current.copy(
+                conversations = current.conversations.map {
+                    if (it.id == pass.itemId) it.copy(provisionalTranslation = translated) else it
+                },
+            )
+        }
     }
 
     private fun stop(speaker: Speaker) {
@@ -368,36 +505,99 @@ class SessionViewModel(
     private fun finalize(speaker: Speaker, owner: SpeechTranscriber) {
         val current = mutableState.value
         if (transcriber !== owner || current.phase != finalizingPhase(speaker)) return
-        val item = current.conversations.lastOrNull()?.takeIf { it.speaker == speaker && it.isFinal }
-        if (item == null) {
+        val itemId = activeItemId
+        val item = current.conversations.firstOrNull { it.id == itemId && it.speaker == speaker && it.isFinal }
+        if (item == null || item.transcript.isBlank()) {
             transcriber = null
-            mutableState.value = current.copy(phase = SessionPhase.Ready)
+            endLiveTranslation()
+            mutableState.value = current.copy(
+                phase = SessionPhase.Ready,
+                conversations = current.conversations.filterNot { it.id == itemId },
+                notice = if (item?.transcript?.isBlank() == true) UiText.res(R.string.no_speech_notice) else current.notice,
+            )
             return
         }
         transcriber = null
         mutableState.value = current.copy(phase = translatingPhase(speaker))
+        startFinalTranslation(item)
+    }
+
+    private fun submitTyped(text: String, speaker: Speaker) {
+        val transcript = text.trim()
+        val current = mutableState.value
+        if (transcript.isEmpty() || !current.conversationStarted || current.phase != SessionPhase.Ready) return
+        val item = ConversationItem(
+            id = "transcript-${nextItemId++}",
+            speaker = speaker,
+            sourceLanguage = current.settingsFor(speaker).inputLanguage,
+            targetLanguage = current.settingsFor(speaker.other()).readingLanguage,
+            transcript = transcript,
+            isFinal = true,
+        )
+        activeItemId = item.id
+        mutableState.value = current.copy(
+            phase = translatingPhase(speaker),
+            conversations = current.conversations + item,
+            notice = null,
+        )
+        startFinalTranslation(item)
+    }
+
+    private fun retryTranslation(id: String) {
+        val current = mutableState.value
+        if (!current.conversationStarted || current.phase != SessionPhase.Ready) return
+        val item = current.conversations.firstOrNull { it.id == id && it.translationError != null } ?: return
+        activeItemId = item.id
+        mutableState.value = current.copy(
+            phase = translatingPhase(item.speaker),
+            conversations = current.conversations.map {
+                if (it.id == id) it.copy(translation = null, provisionalTranslation = null, translationError = null) else it
+            },
+            notice = null,
+        )
+        startFinalTranslation(item.copy(translation = null, provisionalTranslation = null, translationError = null))
+    }
+
+    private fun startFinalTranslation(item: ConversationItem) {
         val prompt = HyMt2TranslationRequestBuilder.build(item.transcript, item.targetLanguage)
-        viewModelScope.launch {
+        val requestGeneration = translationGeneration.incrementAndGet()
+        translationJob?.cancel()
+        translationJob = viewModelScope.launch {
             runCatching { translator.translate(prompt) }
-                .onSuccess { completeTranslation(item.id, it) }
-                .onFailure { failTranslation(item.id, it.asUiText(R.string.error_translation_failed)) }
+                .onSuccess { completeTranslation(item.id, requestGeneration, it) }
+                .onFailure { error ->
+                    if (error !is CancellationException) {
+                        failTranslation(item.id, requestGeneration, error.asUiText(R.string.error_translation_failed))
+                    }
+                }
         }
     }
 
-    private fun completeTranslation(id: String, translation: String) {
+    private fun completeTranslation(id: String, requestGeneration: Long, translation: String) {
         val current = mutableState.value
-        if (!current.conversationStarted) return
-        mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, translationError = null) else it })
+        if (!current.conversationStarted || activeItemId != id || translationGeneration.get() != requestGeneration) return
+        endLiveTranslation()
+        mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, provisionalTranslation = null, translationError = null) else it })
     }
-    private fun failTranslation(id: String, message: UiText) {
+    private fun failTranslation(id: String, requestGeneration: Long, message: UiText) {
         val current = mutableState.value
-        if (!current.conversationStarted) return
-        mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translationError = message) else it })
+        if (!current.conversationStarted || activeItemId != id || translationGeneration.get() != requestGeneration) return
+        endLiveTranslation()
+        mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(provisionalTranslation = null, translationError = message) else it })
     }
     private fun fail(message: UiText, owner: SpeechTranscriber? = transcriber) {
         if (owner !== transcriber || !mutableState.value.conversationStarted) return
-        owner?.destroy(); transcriber = null
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.Error, errorMessage = message)
+        owner?.destroy()
+        transcriber = null
+        recordingAudio?.stop()
+        recordingAudio = null
+        val id = activeItemId
+        endLiveTranslation()
+        mutableState.value = mutableState.value.copy(
+            phase = SessionPhase.Error,
+            conversations = mutableState.value.conversations.filterNot { it.id == id },
+            errorMessage = message,
+        )
     }
     /**
      * Ending a session stops recognition and clears the conversation but keeps the model resident,
@@ -405,10 +605,20 @@ class SessionViewModel(
      * [onCleared], when the view model itself goes away.
      */
     private fun endSession() {
+        if (mutableState.value.phase == SessionPhase.LoadingModel || mutableState.value.backgroundDownload?.isActive == true) {
+            cancelModelPreparation()
+            return
+        }
         val activeTranscriber = transcriber
         transcriber = null
         activeTranscriber?.destroy()
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
+        recordingAudio?.stop()
+        recordingAudio = null
+        translationGeneration.incrementAndGet()
+        translationJob?.cancel()
+        translationJob = null
+        endLiveTranslation()
+        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, notice = null, modelLoadProgress = 0f)
     }
     /**
      * Empties the transcript without ending the session: the model stays resident, both language
@@ -420,6 +630,30 @@ class SessionViewModel(
         val current = mutableState.value
         if (!current.canClearConversation) return
         mutableState.value = current.copy(conversations = emptyList())
+    }
+
+    private fun handleAudioInterruption() {
+        val current = mutableState.value
+        if (AudioInterruptionPolicy.response(current) != AudioInterruptionResponse.AbandonUtterance) return
+        val id = activeItemId
+        val activeTranscriber = transcriber
+        transcriber = null
+        activeTranscriber?.destroy()
+        recordingAudio?.stop()
+        recordingAudio = null
+        endLiveTranslation()
+        mutableState.value = current.copy(
+            phase = SessionPhase.Ready,
+            conversations = current.conversations.filterNot { it.id == id },
+            errorMessage = null,
+            notice = UiText.res(R.string.audio_interrupted_notice),
+        )
+    }
+
+    private fun endLiveTranslation() {
+        partialTranslationJob?.cancel()
+        partialTranslationJob = null
+        activeItemId = null
     }
 
     private fun retry() {
@@ -435,13 +669,20 @@ class SessionViewModel(
     }
     override fun onCleared() {
         invalidateBackgroundDownloadWork()
+        invalidateModelLoadWork()
+        translationGeneration.incrementAndGet()
+        translationJob?.cancel()
+        partialTranslationJob?.cancel()
         transcriber?.destroy()
         transcriber = null
+        recordingAudio?.stop()
+        recordingAudio = null
         translator.close()
     }
 
     private companion object {
         const val BACKGROUND_DOWNLOAD_POLL_INTERVAL_MILLIS = 1_000L
+        const val PARTIAL_TRANSLATION_DEBOUNCE_MILLIS = 350L
     }
 }
 

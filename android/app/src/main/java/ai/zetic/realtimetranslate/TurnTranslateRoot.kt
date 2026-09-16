@@ -33,7 +33,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,9 +94,6 @@ fun TurnTranslateRoot(
     var primingSeen by remember { mutableStateOf(preferences.permissionPrimingSeen) }
     var consent by remember { mutableStateOf<ConsentPrompt?>(null) }
     var modelRemovalConfirmation by remember { mutableStateOf(false) }
-    // Seeded from the stored preference rather than defaulted, so a launch that starts muted never
-    // speaks before the screen appears.
-    var isMuted by remember { mutableStateOf(preferences.speechMuted) }
     var appLanguage by remember { mutableStateOf(AppLanguageStore.current()) }
 
     val clearedToast = stringResource(R.string.toast_conversation_cleared)
@@ -107,8 +103,7 @@ fun TurnTranslateRoot(
 
     KeepScreenAwake(state)
     ComfortHaptics(state, haptics)
-    val announcer = rememberSpokenTranslationAnnouncer(state.conversations)
-    SpokenTranslations(state, isMuted, announcer)
+    val speechOutput = rememberSpeechOutput()
 
     // The one honest signal this build has that a model is already on the phone. Written the first
     // time a load succeeds, so the second session never asks for consent to a download that is not
@@ -143,24 +138,25 @@ fun TurnTranslateRoot(
                 when (action) {
                     is UiAction.PttPress -> haptics(HapticEvent.TurnBegan)
                     is UiAction.PttRelease -> haptics(HapticEvent.TurnEnded)
+                    is UiAction.TogglePtt -> haptics(
+                        if (state.activeSpeaker() == action.speaker) HapticEvent.TurnEnded else HapticEvent.TurnBegan,
+                    )
                     else -> Unit
                 }
                 // Nothing is ever spoken while the microphone is open, so a turn beginning stops
                 // speech synchronously before the recognizer starts. Ending a session stops it too.
                 when (action) {
-                    is UiAction.PttPress, is UiAction.TogglePtt, UiAction.EndSession -> announcer.stop()
+                    is UiAction.PttPress,
+                    is UiAction.TogglePtt,
+                    is UiAction.SubmitTyped,
+                    UiAction.EndSession,
+                    UiAction.CancelModelPreparation,
+                    UiAction.ClearConversation -> speechOutput.stop()
                     else -> Unit
                 }
                 onAction(action)
             }
         }
-    }
-
-    /** Muting is what someone reaches for to make the phone stop talking, so it stops it. */
-    fun toggleMute() {
-        isMuted = !isMuted
-        preferences.speechMuted = isMuted
-        if (isMuted) announcer.stop()
     }
 
     /** The drawer stays open: the thing worth seeing afterwards is the row showing the new value. */
@@ -182,7 +178,7 @@ fun TurnTranslateRoot(
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
-                // The wordmark is the only way in. An edge swipe on the transcript is not.
+                // The trailing settings button is the only way in. An edge swipe on the transcript is not.
                 gesturesEnabled = drawerState.isOpen,
                 scrimColor = Scrim,
                 drawerContent = {
@@ -204,7 +200,7 @@ fun TurnTranslateRoot(
                                     onClearConversation = {
                                         // The sentence being spoken belongs to a bubble that is
                                         // going away.
-                                        announcer.stop()
+                                        speechOutput.stop()
                                         onAction(UiAction.ClearConversation)
                                         scope.launch { drawerState.close() }
                                         drawerToast.show(clearedToast)
@@ -235,9 +231,12 @@ fun TurnTranslateRoot(
                             item.copyableText?.let { copy(it, bubbleCopiedToast, copyToast) }
                         },
                         copyToast = copyToast,
-                        isMuted = isMuted,
-                        onToggleMute = ::toggleMute,
-                        onReplayBubble = { announcer.replay(it, isMuted) },
+                        onReplayBubble = { item ->
+                            when (val decision = SpokenTranslation.decision(item)) {
+                                is SpokenTranslation.Speak -> speechOutput.speak(decision.text, decision.languageCode)
+                                SpokenTranslation.Silent -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -325,31 +324,11 @@ private fun KeepScreenAwake(state: SessionUiState) {
  * than left holding an engine connection the process no longer has a use for.
  */
 @Composable
-private fun rememberSpokenTranslationAnnouncer(seed: List<ConversationItem>): SpokenTranslationAnnouncer {
+private fun rememberSpeechOutput(): SpeechOutput {
     val context = LocalContext.current
-    // `seed` is read once, at creation: it is the transcript that is already on screen and must not
-    // be read aloud, not a value the announcer should follow.
-    val initial = rememberUpdatedState(seed)
     val output = remember(context) { AndroidSpeechOutput(context) }
-    val announcer = remember(output) { SpokenTranslationAnnouncer(output).seed(initial.value) }
     DisposableEffect(output) { onDispose { output.shutdown() } }
-    return announcer
-}
-
-/**
- * A translation is spoken exactly once, at the moment its bubble reaches the translated state. The
- * announcer owns which ones those are; this is only the effect that hands it each new transcript.
- */
-@Composable
-private fun SpokenTranslations(
-    state: SessionUiState,
-    isMuted: Boolean,
-    announcer: SpokenTranslationAnnouncer,
-) {
-    val muted = rememberUpdatedState(isMuted)
-    LaunchedEffect(state.conversations) {
-        announcer.onConversationsChanged(state.conversations, muted.value)
-    }
+    return output
 }
 
 /** Turns a [HapticEvent] into the platform feedback the phone's own haptic settings scale. */
