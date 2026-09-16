@@ -11,14 +11,12 @@
         <item name="android:statusBarColor">#FFFFFF</item>
     </style>
 
-    <!-- Cold launch shows the ZETIC lockup centered on `color.surface`, so the first
-         frame is the app's own background rather than a blank white flash and the
-         transition into the header is a continuation of the same surface. This is the
-         Android half of the iOS `UILaunchScreen`; the two draw the same lockup on the
-         same white. -->
+    <!-- Cold launch uses the app's white surface from the first frame. Keep the splash
+         icon transparent so Android does not fall back to the launcher icon or crop a
+         wide brand lockup inside its masked icon canvas. -->
     <style name="Theme.RealtimeTranslate.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@null</item>
         <item name="postSplashScreenTheme">@style/Theme.RealtimeTranslate</item>
     </style>
 </resources>

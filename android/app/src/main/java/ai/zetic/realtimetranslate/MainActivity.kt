@@ -25,9 +25,8 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: SessionViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Before `super`, so the launch window is the app's own surface with the ZETIC lockup on it
-        // rather than a blank flash, and so the post-splash theme is in force by the time the
-        // activity reads it.
+        // Before `super`, so the launch window uses the app's own surface from the first frame and
+        // the post-splash theme is in force by the time the activity reads it.
         installSplashScreen()
         super.onCreate(savedInstanceState)
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
