@@ -124,28 +124,66 @@ object OnDeviceRecognitionIntentFactory {
     }
 }
 
+object KoreanSpeechModelDownloadRequest {
+    data class IntentSpec(val languageTag: String, val preferOffline: Boolean)
+
+    fun shouldTrigger(
+        sdkInt: Int,
+        installedTags: List<String>,
+        supportedTags: List<String>,
+        pendingTags: List<String>,
+    ): Boolean = sdkInt >= Build.VERSION_CODES.TIRAMISU &&
+        supportedTags.hasKoreanLocale() &&
+        !installedTags.hasKoreanLocale() &&
+        !pendingTags.hasKoreanLocale()
+
+    fun intentSpec(): IntentSpec = IntentSpec(
+        languageTag = SpeechLanguageCatalogMapping.KOREAN_LANGUAGE_TAG,
+        preferOffline = true,
+    )
+
+    fun intent(sdkInt: Int): Intent = OnDeviceRecognitionIntentFactory.create(
+        SpeechLanguage.Installed(intentSpec().languageTag, "Korean"),
+        sdkInt,
+    )
+
+    private fun List<String>.hasKoreanLocale(): Boolean =
+        any { it.equals(SpeechLanguageCatalogMapping.KOREAN_LANGUAGE_TAG, ignoreCase = true) }
+}
+
 interface SpeechLanguageCatalog {
     fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit)
 }
 
 data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: UiText? = null)
 
-object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
+class AndroidSpeechLanguageCatalog(
+    private val platform: OnDeviceSpeechRecognizerPlatform = AndroidOnDeviceSpeechRecognizerPlatform,
+) : SpeechLanguageCatalog {
     override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             onResult(SpeechLanguageCatalogResult(SpeechLanguageCatalogMapping.legacy()))
             return
         }
-        if (!AndroidOnDeviceSpeechRecognizerPlatform.isOnDeviceRecognitionAvailable(context)) {
+        if (!platform.isOnDeviceRecognitionAvailable(context)) {
             onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), UiText.res(R.string.speech_catalog_no_recognizer)))
             return
         }
-        val recognizer = AndroidOnDeviceSpeechRecognizerPlatform.createOnDeviceSpeechRecognizer(context)
+        val recognizer = platform.createOnDeviceSpeechRecognizer(context)
         recognizer.checkRecognitionSupport(
             OnDeviceRecognitionIntentFactory.create(SpeechLanguage.Automatic, Build.VERSION.SDK_INT),
             context.mainExecutor,
             object : RecognitionSupportCallback {
                 override fun onSupportResult(support: RecognitionSupport) {
+                    if (KoreanSpeechModelDownloadRequest.shouldTrigger(
+                            sdkInt = Build.VERSION.SDK_INT,
+                            installedTags = support.installedOnDeviceLanguages,
+                            supportedTags = support.supportedOnDeviceLanguages,
+                            pendingTags = support.pendingOnDeviceLanguages,
+                        )
+                    ) {
+                        platform.triggerModelDownload(recognizer, KoreanSpeechModelDownloadRequest.intent(Build.VERSION.SDK_INT))
+                    }
                     val languages = SpeechLanguageCatalogMapping.onDevice(
                         installedTags = support.installedOnDeviceLanguages,
                         supportedTags = support.supportedOnDeviceLanguages,
@@ -268,6 +306,7 @@ object SpokenLanguageMatching {
 interface OnDeviceSpeechRecognizerPlatform {
     fun isOnDeviceRecognitionAvailable(context: Context): Boolean
     fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer
+    fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent)
 }
 
 object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatform {
@@ -277,6 +316,12 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
     @android.annotation.TargetApi(Build.VERSION_CODES.S)
     override fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer =
         SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
+    override fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || Looper.myLooper() != Looper.getMainLooper()) return
+        runCatching { recognizer.triggerModelDownload(intent) }
+    }
 }
 
 object OnDeviceRecognitionEligibility {

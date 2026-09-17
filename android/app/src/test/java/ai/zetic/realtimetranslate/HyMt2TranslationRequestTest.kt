@@ -1,6 +1,7 @@
 package ai.zetic.realtimetranslate
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
@@ -73,6 +74,50 @@ class HyMt2TranslationRequestTest {
         assertEquals("ko-KR", korean.languageTag)
         assertEquals(SpeechLanguage.OnDeviceStatus.Unverified, korean.onDeviceStatus)
         assertTrue(korean.onDeviceStatus.isSelectable)
+    }
+
+    @Test
+    fun `triggers Korean model download only for supported not-installed not-pending models`() {
+        assertTrue(
+            KoreanSpeechModelDownloadRequest.shouldTrigger(
+                sdkInt = 33,
+                installedTags = listOf("en-US"),
+                supportedTags = listOf("en-US", "ko-KR"),
+                pendingTags = emptyList(),
+            ),
+        )
+        assertFalse(
+            KoreanSpeechModelDownloadRequest.shouldTrigger(
+                sdkInt = 33,
+                installedTags = listOf("ko-KR"),
+                supportedTags = listOf("ko-KR"),
+                pendingTags = emptyList(),
+            ),
+        )
+        assertFalse(
+            KoreanSpeechModelDownloadRequest.shouldTrigger(
+                sdkInt = 33,
+                installedTags = listOf("en-US"),
+                supportedTags = listOf("ko-KR"),
+                pendingTags = listOf("ko-KR"),
+            ),
+        )
+        assertFalse(
+            KoreanSpeechModelDownloadRequest.shouldTrigger(
+                sdkInt = 32,
+                installedTags = listOf("en-US"),
+                supportedTags = listOf("ko-KR"),
+                pendingTags = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun `Korean model download request is explicit and offline`() {
+        val intent = KoreanSpeechModelDownloadRequest.intentSpec()
+
+        assertEquals("ko-KR", intent.languageTag)
+        assertEquals(true, intent.preferOffline)
     }
 
     @Test

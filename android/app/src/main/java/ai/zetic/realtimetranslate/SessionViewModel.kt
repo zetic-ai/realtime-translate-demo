@@ -38,7 +38,7 @@ sealed interface SessionAction {
 class SessionViewModel(
     private val transcriberFactory: (Context) -> SpeechTranscriber = { AndroidOnDeviceSpeechTranscriber(it) },
     private val translator: HyMt2Translator = MelangeHyMt2Translator(BuildConfig.MELANGE_PERSONAL_KEY),
-    private val speechLanguageCatalog: SpeechLanguageCatalog = AndroidSpeechLanguageCatalog,
+    private val speechLanguageCatalog: SpeechLanguageCatalog = AndroidSpeechLanguageCatalog(),
     languagePreferences: LanguagePreferenceStore? = null,
     private val audioInterruptionFactory: (Context) -> RecordingAudioInterruption = { AndroidRecordingAudioInterruption(it) },
     initialState: SessionUiState = SessionUiState(SessionPhase.PermissionRequired),
