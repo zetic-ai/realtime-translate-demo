@@ -18,17 +18,19 @@
     <string name="status_translating">Traduciendo para %1$s</string>
     <string name="status_error">Se produjo un error</string>
     <string name="status_accessibility">Estado de la sesión: %1$s</string>
-    <string name="speech_catalog_loading">Comprobando los idiomas instalados</string>
+    <string name="speech_catalog_loading">Comprobando los idiomas disponibles en el dispositivo</string>
 
     <!-- Header and language bar -->
     <string name="speech_language_automatic">Automático (reconocimiento del dispositivo)</string>
     <string name="language_chip_accessibility">Idiomas del hablante %1$s: lee %2$s, habla %3$s</string>
     <string name="menu_reading_language">Idioma de lectura</string>
     <string name="menu_spoken_language">Idioma hablado</string>
-    <string name="speech_model_status_unverified">Esta versión de Android no permite comprobar el modelo sin conexión</string>
-    <string name="speech_model_status_download_required">Se necesita descargar el modelo de coreano sin conexión</string>
-    <string name="speech_model_status_download_pending">La descarga del modelo de coreano sin conexión está pendiente</string>
-    <string name="speech_korean_model_guidance">La voz en coreano necesita su modelo sin conexión. Gestiónalo en los ajustes de entrada de voz de Android.</string>
+    <string name="speech_model_status_download_required">Descargar paquete de voz</string>
+    <string name="speech_model_status_download_pending">Descargando paquete de voz</string>
+    <string name="speech_model_group_downloading">Descargando</string>
+    <string name="speech_model_group_available">Disponible para descargar</string>
+    <string name="speech_model_download_guidance">Los paquetes de voz se descargan solo cuando eliges uno.</string>
+    <string name="speech_model_download_failed">Android no pudo iniciar la descarga de este paquete de voz.</string>
     <string name="speech_open_voice_input_settings">Abrir ajustes de entrada de voz</string>
 
     <!-- Session banner -->
@@ -141,10 +143,11 @@
     <!-- Speech recognition failures -->
     <string name="speech_error_main_thread">El reconocimiento de voz local debe iniciarse en el hilo principal de Android.</string>
     <string name="speech_error_recognition_failed">Falló el reconocimiento de voz local (error %1$d).</string>
-    <string name="speech_error_android_version">Este dispositivo necesita Android 12 (API 31) o una versión posterior para el reconocimiento de voz local.</string>
+    <string name="speech_error_android_version">Este dispositivo necesita Android 13 (API 33) o una versión posterior para el reconocimiento de voz local.</string>
     <string name="speech_error_permission">Se necesita permiso del micrófono.</string>
     <string name="speech_error_no_recognizer">Este dispositivo no tiene reconocimiento de voz local. La app no recurre al reconocimiento en línea.</string>
     <string name="speech_catalog_no_recognizer">Este dispositivo no tiene reconocimiento de voz local.</string>
+    <string name="speech_catalog_android_version">La entrada de voz requiere Android 13 (API 33) o una versión posterior.</string>
     <string name="speech_catalog_unavailable">La lista de idiomas instalados no está disponible (error %1$d).</string>
 
     <!-- Translation failures -->

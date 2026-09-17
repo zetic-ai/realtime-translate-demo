@@ -88,6 +88,7 @@ import kotlin.math.max
 sealed interface UiAction {
     data object RequestPermission : UiAction
     data class SelectInput(val speaker: Speaker, val language: SpeechLanguage) : UiAction
+    data class RequestSpeechModelDownload(val language: SpeechLanguage.Installed) : UiAction
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
     data object ScheduleModelDownload : UiAction
     data object RemoveDownloadedModel : UiAction
@@ -106,6 +107,7 @@ sealed interface UiAction {
 fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RequestPermission -> SessionAction.Retry
     is UiAction.SelectInput -> SessionAction.InputLanguageChanged(speaker, language)
+    is UiAction.RequestSpeechModelDownload -> SessionAction.RequestSpeechModelDownload(context, language)
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
     UiAction.ScheduleModelDownload -> SessionAction.ScheduleBackgroundDownload(context)
     UiAction.RemoveDownloadedModel -> SessionAction.RemoveDownloadedModel(context)
@@ -317,35 +319,43 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
                 automaticName = stringResource(R.string.speech_language_automatic),
                 locale = locale,
             )
-            spokenLanguages.forEach { language ->
-                val status = (language as? SpeechLanguage.Installed)?.onDeviceStatus
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(language.displayName.text())
-                            speechLanguageStatusLabel(status)?.let {
-                                Text(it, color = TextSecondary, fontSize = 12.sp)
-                            }
-                        }
-                    },
-                    onClick = {
-                        expanded = false
-                        if (status == null || status.isSelectable) {
-                            onAction(UiAction.SelectInput(speaker, language))
-                        } else {
-                            onOpenVoiceInputSettings()
-                        }
-                    },
+            val readyLanguages = spokenLanguages.filter { language ->
+                (language as? SpeechLanguage.Installed)?.onDeviceStatus?.isSelectable != false
+            }
+            val pendingLanguages = spokenLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .filter { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
+            val downloadableLanguages = spokenLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .filter { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadRequired }
+
+            readyLanguages.forEach { language ->
+                SpokenLanguageMenuItem(language) {
+                    expanded = false
+                    onAction(UiAction.SelectInput(speaker, language))
+                }
+            }
+            if (pendingLanguages.isNotEmpty()) {
+                MenuSectionHeader(stringResource(R.string.speech_model_group_downloading))
+                pendingLanguages.forEach { SpokenLanguageMenuItem(it, enabled = false) {} }
+            }
+            if (downloadableLanguages.isNotEmpty()) {
+                HorizontalDivider(color = DividerLine)
+                MenuSectionHeader(stringResource(R.string.speech_model_group_available))
+                downloadableLanguages.forEach { language ->
+                    SpokenLanguageMenuItem(language) {
+                        onAction(UiAction.RequestSpeechModelDownload(language))
+                    }
+                }
+                Text(
+                    stringResource(R.string.speech_model_download_guidance),
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
-            if (spokenLanguages.any { language ->
-                    (language as? SpeechLanguage.Installed)?.onDeviceStatus?.let {
-                        it != SpeechLanguage.OnDeviceStatus.Ready
-                    } == true
-                }) {
+            state.speechModelDownloadError?.let { error ->
                 HorizontalDivider(color = DividerLine)
                 Text(
-                    stringResource(R.string.speech_korean_model_guidance),
+                    error.text(),
                     color = TextSecondary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -372,8 +382,32 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 }
 
 @Composable
+private fun SpokenLanguageMenuItem(
+    language: SpeechLanguage,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val status = (language as? SpeechLanguage.Installed)?.onDeviceStatus
+    DropdownMenuItem(
+        text = {
+            Column {
+                Text(language.displayName.text())
+                speechLanguageStatusLabel(status)?.let {
+                    Text(
+                        it,
+                        color = if (status == SpeechLanguage.OnDeviceStatus.DownloadRequired) Accent else TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        },
+        enabled = enabled,
+        onClick = onClick,
+    )
+}
+
+@Composable
 private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): String? = when (status) {
-    SpeechLanguage.OnDeviceStatus.Unverified -> stringResource(R.string.speech_model_status_unverified)
     SpeechLanguage.OnDeviceStatus.DownloadRequired -> stringResource(R.string.speech_model_status_download_required)
     SpeechLanguage.OnDeviceStatus.DownloadPending -> stringResource(R.string.speech_model_status_download_pending)
     SpeechLanguage.OnDeviceStatus.Ready, null -> null

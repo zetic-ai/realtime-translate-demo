@@ -19,17 +19,19 @@
     <string name="status_translating">Traduction pour %1$s</string>
     <string name="status_error">Une erreur est survenue</string>
     <string name="status_accessibility">État de la session : %1$s</string>
-    <string name="speech_catalog_loading">Vérification des langues installées</string>
+    <string name="speech_catalog_loading">Vérification des langues disponibles sur l’appareil</string>
 
     <!-- Header and language bar -->
     <string name="speech_language_automatic">Automatique (reconnaissance de l’appareil)</string>
     <string name="language_chip_accessibility">Langues de l’interlocuteur %1$s : lit %2$s, parle %3$s</string>
     <string name="menu_reading_language">Langue de lecture</string>
     <string name="menu_spoken_language">Langue parlée</string>
-    <string name="speech_model_status_unverified">La disponibilité du modèle hors ligne ne peut pas être vérifiée sur cette version d’Android</string>
-    <string name="speech_model_status_download_required">Téléchargement du modèle coréen hors ligne requis</string>
-    <string name="speech_model_status_download_pending">Téléchargement du modèle coréen hors ligne en attente</string>
-    <string name="speech_korean_model_guidance">La reconnaissance du coréen nécessite son modèle hors ligne. Gérez-le dans les réglages de saisie vocale Android.</string>
+    <string name="speech_model_status_download_required">Télécharger le pack vocal</string>
+    <string name="speech_model_status_download_pending">Téléchargement du pack vocal</string>
+    <string name="speech_model_group_downloading">Téléchargement en cours</string>
+    <string name="speech_model_group_available">Disponible au téléchargement</string>
+    <string name="speech_model_download_guidance">Les packs vocaux sont téléchargés uniquement lorsque vous en choisissez un.</string>
+    <string name="speech_model_download_failed">Android n’a pas pu lancer le téléchargement de ce pack vocal.</string>
     <string name="speech_open_voice_input_settings">Ouvrir les réglages de saisie vocale</string>
 
     <!-- Session banner -->
@@ -142,10 +144,11 @@
     <!-- Speech recognition failures -->
     <string name="speech_error_main_thread">La reconnaissance vocale sur l’appareil doit démarrer sur le thread principal Android.</string>
     <string name="speech_error_recognition_failed">Échec de la reconnaissance vocale sur l’appareil (erreur %1$d).</string>
-    <string name="speech_error_android_version">Cet appareil nécessite Android 12 (API 31) ou une version plus récente pour la reconnaissance vocale sur l’appareil.</string>
+    <string name="speech_error_android_version">Cet appareil nécessite Android 13 (API 33) ou une version plus récente pour la reconnaissance vocale sur l’appareil.</string>
     <string name="speech_error_permission">L’autorisation du micro est requise.</string>
     <string name="speech_error_no_recognizer">Cet appareil n’a pas de reconnaissance vocale sur l’appareil. L’app ne bascule pas vers la reconnaissance en ligne.</string>
     <string name="speech_catalog_no_recognizer">Cet appareil n’a pas de reconnaissance vocale sur l’appareil.</string>
+    <string name="speech_catalog_android_version">La saisie vocale nécessite Android 13 (API 33) ou une version plus récente.</string>
     <string name="speech_catalog_unavailable">La liste des langues installées n’est pas disponible (erreur %1$d).</string>
 
     <!-- Translation failures -->

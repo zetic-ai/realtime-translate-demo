@@ -13,7 +13,6 @@ sealed interface SpeechLanguage {
 
     enum class OnDeviceStatus(val isSelectable: Boolean) {
         Ready(true),
-        Unverified(true),
         DownloadRequired(false),
         DownloadPending(false),
     }
@@ -93,6 +92,7 @@ data class SessionUiState(
     val speechLanguages: List<SpeechLanguage> = listOf(SpeechLanguage.Automatic),
     val speechLanguageCatalogLoading: Boolean = false,
     val speechLanguageCatalogMessage: UiText? = null,
+    val speechModelDownloadError: UiText? = null,
     val backgroundDownload: ModelDownloadUiState? = null,
     val modelRemovalMessage: UiText? = null,
     val errorMessage: UiText? = null,

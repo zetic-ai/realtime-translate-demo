@@ -79,6 +79,51 @@ class SessionViewModelTest {
 
         assertEquals("en-US", (viewModel.state.value.settingsFor(Speaker.A).inputLanguage as SpeechLanguage.Installed).languageTag)
         assertEquals("ko-KR", (viewModel.state.value.settingsFor(Speaker.B).inputLanguage as SpeechLanguage.Installed).languageTag)
+        assertTrue(catalog.downloadRequests.isEmpty())
+    }
+
+    @Test fun `requesting one downloadable language starts only that exact pack and marks it pending`() = runTest {
+        val french = SpeechLanguage.Installed("fr-CA", "French (Canada)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        val spanish = SpeechLanguage.Installed("es-MX", "Spanish (Mexico)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        val catalog = FakeCatalog(listOf(SpeechLanguage.Automatic, french, spanish))
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            speechLanguageCatalog = catalog,
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+        viewModel.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        viewModel.dispatch(SessionAction.RequestSpeechModelDownload(TestContext(), french))
+        viewModel.dispatch(SessionAction.RequestSpeechModelDownload(TestContext(), french))
+
+        assertEquals(listOf("fr-CA"), catalog.downloadRequests)
+        assertEquals(
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+            viewModel.state.value.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .first { it.languageTag == "fr-CA" }.onDeviceStatus,
+        )
+        assertEquals(
+            SpeechLanguage.OnDeviceStatus.DownloadRequired,
+            viewModel.state.value.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .first { it.languageTag == "es-MX" }.onDeviceStatus,
+        )
+        assertEquals(SpeechLanguage.Automatic, viewModel.state.value.settingsFor(Speaker.A).inputLanguage)
+    }
+
+    @Test fun `failed speech pack request restores downloadable state and offers settings fallback`() = runTest {
+        val french = SpeechLanguage.Installed("fr-FR", "French (France)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        val catalog = FakeCatalog(listOf(SpeechLanguage.Automatic, french), requestResult = false)
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            speechLanguageCatalog = catalog,
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+        viewModel.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        viewModel.dispatch(SessionAction.RequestSpeechModelDownload(TestContext(), french))
+
+        assertEquals(SpeechLanguage.OnDeviceStatus.DownloadRequired, (viewModel.state.value.speechLanguages[1] as SpeechLanguage.Installed).onDeviceStatus)
+        assertEquals(UiText.res(R.string.speech_model_download_failed), viewModel.state.value.speechModelDownloadError)
     }
 
     @Test fun `an explicit spoken language survives the catalog arriving`() = runTest {
@@ -575,9 +620,22 @@ class SessionViewModelTest {
         override fun getApplicationContext(): Context = this
     }
 
-    private class FakeCatalog(private val languages: List<SpeechLanguage>) : SpeechLanguageCatalog {
+    private class FakeCatalog(
+        private val languages: List<SpeechLanguage>,
+        private val requestResult: Boolean = true,
+    ) : SpeechLanguageCatalog {
+        val downloadRequests = mutableListOf<String>()
         override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) =
             onResult(SpeechLanguageCatalogResult(languages))
+        override fun requestDownload(
+            context: Context,
+            language: SpeechLanguage.Installed,
+            onResult: (Boolean) -> Unit,
+        ): Boolean {
+            downloadRequests += language.languageTag
+            onResult(requestResult)
+            return true
+        }
     }
 
     private class FakeTranslator(private val loadError: Throwable? = null) : HyMt2Translator {

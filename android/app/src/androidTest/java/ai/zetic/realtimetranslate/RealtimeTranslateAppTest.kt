@@ -154,59 +154,75 @@ class RealtimeTranslateAppTest {
         assertEquals(UiAction.SelectReading(Speaker.A, HyMt2Languages.all.first { it.code == "fr" }), action)
     }
 
-    @Test fun KoreanDownloadRequiredOpensVoiceInputSettingsInsteadOfSelecting() {
+    @Test fun downloadableSpeechPackRequestsOnlyTheChosenLanguage() {
         var action: UiAction? = null
-        var settingsOpened = false
-        val korean = SpeechLanguage.Installed(
-            "ko-KR",
-            "Korean (South Korea)",
+        val french = SpeechLanguage.Installed(
+            "fr-CA",
+            "French (Canada)",
             SpeechLanguage.OnDeviceStatus.DownloadRequired,
         )
         setApp(
-            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, french)),
             onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Available to download").assertIsDisplayed()
+        composeRule.onNodeWithText("Download speech pack").assertIsDisplayed()
+        composeRule.onNodeWithText("French (Canada)").performClick()
+
+        assertEquals(UiAction.RequestSpeechModelDownload(french), action)
+    }
+
+    @Test fun readySpeechPackIsVisibleAndSelectable() {
+        var action: UiAction? = null
+        val spanish = SpeechLanguage.Installed("es-MX", "Spanish (Mexico)")
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, spanish)),
+            onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Spanish (Mexico)").assertIsDisplayed().performClick()
+
+        assertEquals(UiAction.SelectInput(Speaker.A, spanish), action)
+    }
+
+    @Test fun pendingSpeechPackIsGroupedAndCannotRequestAgain() {
+        var actions = 0
+        val japanese = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, japanese)),
+            onAction = { actions += 1 },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Downloading").assertIsDisplayed()
+        composeRule.onNodeWithText("Downloading speech pack").assertIsDisplayed()
+        composeRule.onNodeWithText("Japanese (Japan)").assertIsNotEnabled()
+
+        assertEquals(0, actions)
+    }
+
+    @Test fun failedSpeechPackRequestOffersVoiceInputSettingsFallback() {
+        var settingsOpened = false
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                speechModelDownloadError = UiText.res(R.string.speech_model_download_failed),
+            ),
             onOpenVoiceInputSettings = { settingsOpened = true },
         )
 
         composeRule.onNodeWithContentDescription(CHIP_A).performClick()
-        composeRule.onNodeWithText("Korean offline model download required").assertIsDisplayed()
-        composeRule.onNodeWithText("Korean (South Korea)").performClick()
+        composeRule.onNodeWithText("Android could not start this speech pack download.").assertIsDisplayed()
+        composeRule.onNodeWithText("Open voice input settings").performClick()
 
         assertTrue(settingsOpened)
-        assertEquals(null, action)
-    }
-
-    @Test fun readyKoreanCandidateIsVisibleAndSelectable() {
-        var action: UiAction? = null
-        val korean = SpeechLanguage.Installed("ko-KR", "Korean (South Korea)")
-        setApp(
-            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
-            onAction = { action = it },
-        )
-
-        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
-        composeRule.onNodeWithText("Korean (South Korea)").assertIsDisplayed().performClick()
-
-        assertEquals(UiAction.SelectInput(Speaker.A, korean), action)
-    }
-
-    @Test fun Android12KoreanCandidateRemainsSelectableWithOfflineModelGuidance() {
-        var action: UiAction? = null
-        val korean = SpeechLanguage.Installed(
-            "ko-KR",
-            "Korean (South Korea)",
-            SpeechLanguage.OnDeviceStatus.Unverified,
-        )
-        setApp(
-            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
-            onAction = { action = it },
-        )
-
-        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
-        composeRule.onNodeWithText("Korean speech requires its offline model. Manage it in Android voice input settings.").assertIsDisplayed()
-        composeRule.onNodeWithText("Korean (South Korea)").performClick()
-
-        assertEquals(UiAction.SelectInput(Speaker.A, korean), action)
     }
 
     @Test fun bottomBarHoldsOnlyThePushToTalkControlsAndSessionAction() {

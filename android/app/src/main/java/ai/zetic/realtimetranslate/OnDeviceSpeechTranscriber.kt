@@ -10,7 +10,9 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
+import android.speech.ModelDownloadListener
 import java.util.Locale
+import java.util.concurrent.Executor
 
 interface SpeechTranscriber {
     fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult
@@ -124,35 +126,30 @@ object OnDeviceRecognitionIntentFactory {
     }
 }
 
-object KoreanSpeechModelDownloadRequest {
+object SpeechModelDownloadRequest {
     data class IntentSpec(val languageTag: String, val preferOffline: Boolean)
 
-    fun shouldTrigger(
-        sdkInt: Int,
-        installedTags: List<String>,
-        supportedTags: List<String>,
-        pendingTags: List<String>,
-    ): Boolean = sdkInt >= Build.VERSION_CODES.TIRAMISU &&
-        supportedTags.hasKoreanLocale() &&
-        !installedTags.hasKoreanLocale() &&
-        !pendingTags.hasKoreanLocale()
+    fun shouldTrigger(language: SpeechLanguage.Installed): Boolean =
+        language.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadRequired
 
-    fun intentSpec(): IntentSpec = IntentSpec(
-        languageTag = SpeechLanguageCatalogMapping.KOREAN_LANGUAGE_TAG,
+    fun intentSpec(languageTag: String): IntentSpec = IntentSpec(
+        languageTag = languageTag,
         preferOffline = true,
     )
 
-    fun intent(sdkInt: Int): Intent = OnDeviceRecognitionIntentFactory.create(
-        SpeechLanguage.Installed(intentSpec().languageTag, "Korean"),
+    fun intent(languageTag: String, sdkInt: Int): Intent = OnDeviceRecognitionIntentFactory.create(
+        SpeechLanguage.Installed(languageTag, languageTag),
         sdkInt,
     )
-
-    private fun List<String>.hasKoreanLocale(): Boolean =
-        any { it.equals(SpeechLanguageCatalogMapping.KOREAN_LANGUAGE_TAG, ignoreCase = true) }
 }
 
 interface SpeechLanguageCatalog {
     fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit)
+    fun requestDownload(
+        context: Context,
+        language: SpeechLanguage.Installed,
+        onResult: (Boolean) -> Unit,
+    ): Boolean
 }
 
 data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: UiText? = null)
@@ -162,7 +159,12 @@ class AndroidSpeechLanguageCatalog(
 ) : SpeechLanguageCatalog {
     override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            onResult(SpeechLanguageCatalogResult(SpeechLanguageCatalogMapping.legacy()))
+            onResult(
+                SpeechLanguageCatalogResult(
+                    listOf(SpeechLanguage.Automatic),
+                    UiText.res(R.string.speech_catalog_android_version),
+                ),
+            )
             return
         }
         if (!platform.isOnDeviceRecognitionAvailable(context)) {
@@ -175,15 +177,6 @@ class AndroidSpeechLanguageCatalog(
             context.mainExecutor,
             object : RecognitionSupportCallback {
                 override fun onSupportResult(support: RecognitionSupport) {
-                    if (KoreanSpeechModelDownloadRequest.shouldTrigger(
-                            sdkInt = Build.VERSION.SDK_INT,
-                            installedTags = support.installedOnDeviceLanguages,
-                            supportedTags = support.supportedOnDeviceLanguages,
-                            pendingTags = support.pendingOnDeviceLanguages,
-                        )
-                    ) {
-                        platform.triggerModelDownload(recognizer, KoreanSpeechModelDownloadRequest.intent(Build.VERSION.SDK_INT))
-                    }
                     val languages = SpeechLanguageCatalogMapping.onDevice(
                         installedTags = support.installedOnDeviceLanguages,
                         supportedTags = support.supportedOnDeviceLanguages,
@@ -200,11 +193,32 @@ class AndroidSpeechLanguageCatalog(
         )
     }
 
+    override fun requestDownload(
+        context: Context,
+        language: SpeechLanguage.Installed,
+        onResult: (Boolean) -> Unit,
+    ): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            !SpeechModelDownloadRequest.shouldTrigger(language) ||
+            !platform.isOnDeviceRecognitionAvailable(context)
+        ) {
+            return false
+        }
+        val recognizer = runCatching { platform.createOnDeviceSpeechRecognizer(context) }.getOrNull() ?: return false
+        val started = platform.triggerModelDownload(
+            recognizer = recognizer,
+            intent = SpeechModelDownloadRequest.intent(language.languageTag, Build.VERSION.SDK_INT),
+            executor = context.mainExecutor,
+        ) { success ->
+            recognizer.destroy()
+            onResult(success)
+        }
+        if (!started) recognizer.destroy()
+        return started
+    }
 }
 
 object SpeechLanguageCatalogMapping {
-    const val KOREAN_LANGUAGE_TAG = "ko-KR"
-
     /**
      * The spoken-language names come from the platform, which already localizes them, so the list
      * is built in the app's current language rather than pinned to English. [displayLocale] is a
@@ -213,15 +227,10 @@ object SpeechLanguageCatalogMapping {
     fun installed(tags: List<String>, displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage.Installed> =
         tags.map { installedLanguage(it, displayLocale) }.distinctBy { it.languageTag }.sortedBy { it.name }
 
-    /** Android 12 cannot report recognition support, so Korean remains selectable but explicit. */
-    fun legacy(displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage> = listOf(
-        SpeechLanguage.Automatic,
-        korean(SpeechLanguage.OnDeviceStatus.Unverified, displayLocale),
-    )
-
     /**
-     * Android 13+ reports installed, supported, and pending on-device languages separately. Keep
-     * every installed language and add the explicit Korean locale when its model can be prepared.
+     * Android 13+ reports installed, supported, and pending on-device languages separately. Merge
+     * them without a fixed language whitelist, preserving the exact platform tag from the
+     * highest-priority state so a later download request sends that same tag back to Android.
      */
     fun onDevice(
         installedTags: List<String>,
@@ -229,15 +238,16 @@ object SpeechLanguageCatalogMapping {
         pendingTags: List<String>,
         displayLocale: Locale = Locale.getDefault(),
     ): List<SpeechLanguage.Installed> {
-        val installed = installed(installedTags, displayLocale)
-            .filterNot { it.languageTag.isKoreanLocale() }
-        val koreanStatus = when {
-            installedTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.Ready
-            pendingTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.DownloadPending
-            supportedTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.DownloadRequired
-            else -> null
+        val byTag = linkedMapOf<String, SpeechLanguage.Installed>()
+        fun merge(tags: List<String>, status: SpeechLanguage.OnDeviceStatus) {
+            tags.filter(String::isNotBlank).forEach { tag ->
+                byTag[tag.lowercase(Locale.ROOT)] = installedLanguage(tag, displayLocale).copy(onDeviceStatus = status)
+            }
         }
-        return (installed + listOfNotNull(koreanStatus?.let { korean(it, displayLocale) })).sortedBy { it.name }
+        merge(supportedTags, SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        merge(pendingTags, SpeechLanguage.OnDeviceStatus.DownloadPending)
+        merge(installedTags, SpeechLanguage.OnDeviceStatus.Ready)
+        return byTag.values.sortedBy { it.name }
     }
 
     private fun installedLanguage(tag: String, displayLocale: Locale): SpeechLanguage.Installed {
@@ -245,14 +255,6 @@ object SpeechLanguageCatalogMapping {
         return SpeechLanguage.Installed(tag, locale.getDisplayName(displayLocale).ifBlank { tag })
     }
 
-    private fun korean(status: SpeechLanguage.OnDeviceStatus, displayLocale: Locale): SpeechLanguage.Installed =
-        installedLanguage(KOREAN_LANGUAGE_TAG, displayLocale).copy(onDeviceStatus = status)
-
-    private fun List<String>.hasKoreanLocale(): Boolean =
-        any { it.isKoreanLocale() }
-
-    private fun String.isKoreanLocale(): Boolean =
-        equals(KOREAN_LANGUAGE_TAG, ignoreCase = true)
 }
 
 /**
@@ -306,27 +308,70 @@ object SpokenLanguageMatching {
 interface OnDeviceSpeechRecognizerPlatform {
     fun isOnDeviceRecognitionAvailable(context: Context): Boolean
     fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer
-    fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent)
+    fun triggerModelDownload(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (Boolean) -> Unit,
+    ): Boolean
 }
 
 object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatform {
     override fun isOnDeviceRecognitionAvailable(context: Context): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     @android.annotation.TargetApi(Build.VERSION_CODES.S)
     override fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer =
         SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
 
     @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
-    override fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || Looper.myLooper() != Looper.getMainLooper()) return
-        runCatching { recognizer.triggerModelDownload(intent) }
+    override fun triggerModelDownload(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (Boolean) -> Unit,
+    ): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || Looper.myLooper() != Looper.getMainLooper()) return false
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                triggerModelDownloadWithListener(recognizer, intent, executor, onResult)
+            } else {
+                recognizer.triggerModelDownload(intent)
+                onResult(true)
+            }
+        }.isSuccess
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun triggerModelDownloadWithListener(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (Boolean) -> Unit,
+    ) {
+        var finished = false
+        fun finish(success: Boolean) {
+            if (!finished) {
+                finished = true
+                onResult(success)
+            }
+        }
+        recognizer.triggerModelDownload(
+            intent,
+            executor,
+            object : ModelDownloadListener {
+                override fun onProgress(completedPercent: Int) = Unit
+                override fun onSuccess() = finish(true)
+                override fun onScheduled() = finish(true)
+                override fun onError(error: Int) = finish(false)
+            },
+        )
     }
 }
 
 object OnDeviceRecognitionEligibility {
     fun failureFor(sdkInt: Int, hasRecordAudioPermission: Boolean, isOnDeviceRecognizerAvailable: Boolean): UiText? = when {
-        sdkInt < Build.VERSION_CODES.S -> UiText.res(R.string.speech_error_android_version)
+        sdkInt < Build.VERSION_CODES.TIRAMISU -> UiText.res(R.string.speech_error_android_version)
         !hasRecordAudioPermission -> UiText.res(R.string.speech_error_permission)
         !isOnDeviceRecognizerAvailable -> UiText.res(R.string.speech_error_no_recognizer)
         else -> null

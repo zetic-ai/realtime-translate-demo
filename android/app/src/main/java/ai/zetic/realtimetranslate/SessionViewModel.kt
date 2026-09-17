@@ -19,6 +19,7 @@ sealed interface SessionAction {
     data class RefreshSpeechLanguages(val context: Context) : SessionAction
     data class RestoreLanguagePreferences(val context: Context) : SessionAction
     data class InputLanguageChanged(val speaker: Speaker, val language: SpeechLanguage) : SessionAction
+    data class RequestSpeechModelDownload(val context: Context, val language: SpeechLanguage.Installed) : SessionAction
     data class ReadingLanguageChanged(val speaker: Speaker, val language: TranslationLanguage) : SessionAction
     data class PrepareBackgroundDownload(val context: Context) : SessionAction
     data class ScheduleBackgroundDownload(val context: Context) : SessionAction
@@ -62,6 +63,7 @@ class SessionViewModel(
     private val modelRemovalInProgress = AtomicBoolean()
     private var languagePreferences: LanguagePreferenceStore? = languagePreferences
     private var storedSpokenTags: Map<Speaker, String?> = emptyMap()
+    private val requestedSpeechModelTags = mutableSetOf<String>()
     private var activeItemId: String? = null
     private var nextItemId = initialState.conversations.size.toLong()
     private var partialRevision = 0L
@@ -76,6 +78,7 @@ class SessionViewModel(
         is SessionAction.RefreshSpeechLanguages -> refreshSpeechLanguages(action.context)
         is SessionAction.RestoreLanguagePreferences -> restoreLanguagePreferences(action.context)
         is SessionAction.InputLanguageChanged -> updateSettings(action.speaker) { it.copy(inputLanguage = action.language) }
+        is SessionAction.RequestSpeechModelDownload -> requestSpeechModelDownload(action.context, action.language)
         is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) {
             alignInputLanguage(it.copy(readingLanguage = action.language), mutableState.value.speechLanguages)
         }
@@ -117,8 +120,8 @@ class SessionViewModel(
 
     /**
      * A speaker's chip language drives what the recognizer listens for, so a speaker shown as
-     * Korean is listened to in Korean. A reading language with no installed recognizer leaves the
-     * spoken language exactly as it was.
+     * French is listened to in French, for example. A reading language with no installed
+     * recognizer leaves the spoken language exactly as it was.
      */
     private fun alignInputLanguage(settings: SpeakerSettings, languages: List<SpeechLanguage>): SpeakerSettings {
         val match = SpokenLanguageMatching.match(settings.readingLanguage, languages) ?: return settings
@@ -130,6 +133,9 @@ class SessionViewModel(
         mutableState.value = mutableState.value.copy(speechLanguageCatalogLoading = true, speechLanguageCatalogMessage = null)
         speechLanguageCatalog.load(context.applicationContext) { result ->
             val validLanguages = result.languages.ifEmpty { listOf(SpeechLanguage.Automatic) }
+            validLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .filter { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.Ready }
+                .forEach { requestedSpeechModelTags.remove(it.languageTag.normalizedTag()) }
             val current = mutableState.value
             // The catalog arriving is the first moment a spoken language can be derived at all, so
             // it stands in for init here. A speaker who has explicitly picked a spoken language is
@@ -139,7 +145,7 @@ class SessionViewModel(
                     SpeechLanguage.Automatic.preferenceTag -> SpeechLanguage.Automatic
                     null -> null
                     else -> validLanguages.filterIsInstance<SpeechLanguage.Installed>()
-                        .firstOrNull { it.languageTag == tag }
+                        .firstOrNull { it.languageTag == tag && it.onDeviceStatus.isSelectable }
                 }
                 when {
                     stored != null -> settings.copy(inputLanguage = stored)
@@ -147,13 +153,76 @@ class SessionViewModel(
                     else -> settings
                 }
             }
-            mutableState.value = current.copy(settings = aligned, speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
+            val languagesWithRequestedDownloads = validLanguages.map { language ->
+                if (language is SpeechLanguage.Installed &&
+                    language.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadRequired &&
+                    language.languageTag.normalizedTag() in requestedSpeechModelTags
+                ) {
+                    language.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.DownloadPending)
+                } else {
+                    language
+                }
+            }
+            mutableState.value = current.copy(
+                settings = aligned,
+                speechLanguages = languagesWithRequestedDownloads,
+                speechLanguageCatalogLoading = false,
+                speechLanguageCatalogMessage = result.message,
+                speechModelDownloadError = null,
+            )
             aligned.forEach { (speaker, settings) ->
                 languagePreferences?.setReadingCode(speaker, settings.readingLanguage.code)
                 languagePreferences?.setSpokenTag(speaker, settings.inputLanguage.preferenceTag)
             }
         }
     }
+
+    private fun requestSpeechModelDownload(context: Context, language: SpeechLanguage.Installed) {
+        val current = mutableState.value
+        val catalogLanguage = current.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+            .firstOrNull { it.languageTag.equals(language.languageTag, ignoreCase = true) }
+            ?: return
+        val normalizedTag = catalogLanguage.languageTag.normalizedTag()
+        if (catalogLanguage.onDeviceStatus != SpeechLanguage.OnDeviceStatus.DownloadRequired ||
+            !requestedSpeechModelTags.add(normalizedTag)
+        ) {
+            return
+        }
+
+        mutableState.value = current.copy(
+            speechLanguages = current.speechLanguages.map {
+                if (it is SpeechLanguage.Installed && it.languageTag.equals(catalogLanguage.languageTag, ignoreCase = true)) {
+                    it.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.DownloadPending)
+                } else {
+                    it
+                }
+            },
+            speechModelDownloadError = null,
+        )
+
+        val started = speechLanguageCatalog.requestDownload(context.applicationContext, catalogLanguage) { success ->
+            if (!success) publishSpeechModelDownloadFailure(catalogLanguage.languageTag)
+        }
+        if (!started) publishSpeechModelDownloadFailure(catalogLanguage.languageTag)
+    }
+
+    private fun publishSpeechModelDownloadFailure(languageTag: String) {
+        val normalizedTag = languageTag.normalizedTag()
+        if (!requestedSpeechModelTags.remove(normalizedTag)) return
+        val latest = mutableState.value
+        mutableState.value = latest.copy(
+            speechLanguages = latest.speechLanguages.map {
+                if (it is SpeechLanguage.Installed && it.languageTag.equals(languageTag, ignoreCase = true)) {
+                    it.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.DownloadRequired)
+                } else {
+                    it
+                }
+            },
+            speechModelDownloadError = UiText.res(R.string.speech_model_download_failed),
+        )
+    }
+
+    private fun String.normalizedTag(): String = lowercase(java.util.Locale.ROOT)
 
     private fun downloader(context: Context): HyMt2BackgroundDownload {
         applicationContext = context.applicationContext
