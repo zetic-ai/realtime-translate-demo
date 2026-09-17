@@ -37,7 +37,7 @@ android {
 }
 
 dependencies {
-    implementation("com.zeticai.mlange:mlange:0.0.0-internal.4d3e4535")
+    implementation("com.zeticai.mlange:mlange:0.0.0-internal.9b6b127e")
     // Per-app locales, for the drawer's `App language` row: the framework API from
     // Android 13, the androidx backport below it.
     implementation("androidx.appcompat:appcompat:1.7.0")

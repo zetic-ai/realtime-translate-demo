@@ -17,7 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import com.zeticai.mlange.core.model.llm.LLMNextTokenResult
-import com.zeticai.mlange.core.model.llm.LLMRunResult
+import com.zeticai.mlange.core.utils.error.ZeticMLangeException
 import java.util.concurrent.CountDownLatch
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
@@ -391,7 +391,7 @@ class SessionViewModelTest {
     @Test fun `a loaded model is reused rather than loaded a second time`() = runTest {
         var built = 0
         val session = object : HyMt2ModelSession {
-            override fun run(prompt: String) = LLMRunResult(0)
+            override fun run(prompt: String) = Unit
             override fun waitForNextToken() = LLMNextTokenResult(0, "bonjour", 1, isFinal = true)
             override fun cleanUp() = Unit
             override fun close() = Unit
@@ -402,6 +402,23 @@ class SessionViewModelTest {
         translator.load(TestContext()) { }
 
         assertEquals(1, built)
+    }
+
+    @Test fun `model run failures map to the translated start error`() = runTest {
+        val session = object : HyMt2ModelSession {
+            override fun run(prompt: String) {
+                throw ZeticMLangeException("status 1")
+            }
+            override fun waitForNextToken() = error("not reached")
+            override fun cleanUp() = Unit
+            override fun close() = Unit
+        }
+        val translator = MelangeHyMt2Translator("test") { _, _ -> session }
+        translator.load(TestContext()) { }
+
+        val failure = runCatching { translator.translate("prompt") }.exceptionOrNull()
+
+        assertEquals(UiText.res(R.string.error_model_start_failed), (failure as TranslationFailure).text)
     }
 
     @Test fun `late speech callbacks after ending cannot restart translation`() = runTest {
@@ -676,7 +693,7 @@ class SessionViewModelTest {
         val releaseTokenWait = CountDownLatch(1)
         val fakeModel = object : HyMt2ModelSession {
             var closed = false
-            override fun run(prompt: String) = LLMRunResult(0)
+            override fun run(prompt: String) = Unit
             override fun waitForNextToken(): LLMNextTokenResult {
                 enteredTokenWait.countDown()
                 releaseTokenWait.await()
