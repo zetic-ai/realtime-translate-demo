@@ -26,6 +26,11 @@
     <string name="language_chip_accessibility">Langues de l’interlocuteur %1$s : lit %2$s, parle %3$s</string>
     <string name="menu_reading_language">Langue de lecture</string>
     <string name="menu_spoken_language">Langue parlée</string>
+    <string name="speech_model_status_unverified">La disponibilité du modèle hors ligne ne peut pas être vérifiée sur cette version d’Android</string>
+    <string name="speech_model_status_download_required">Téléchargement du modèle coréen hors ligne requis</string>
+    <string name="speech_model_status_download_pending">Téléchargement du modèle coréen hors ligne en attente</string>
+    <string name="speech_korean_model_guidance">La reconnaissance du coréen nécessite son modèle hors ligne. Gérez-le dans les réglages de saisie vocale Android.</string>
+    <string name="speech_open_voice_input_settings">Ouvrir les réglages de saisie vocale</string>
 
     <!-- Session banner -->
     <string name="banner_permission_body">Zetic Relay a besoin du micro pour reconnaître la parole sur cet appareil.</string>

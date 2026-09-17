@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,7 +33,6 @@ class MainActivity : AppCompatActivity() {
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         viewModel.dispatch(SessionAction.RestoreLanguagePreferences(this))
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
-        if (isPermissionGranted) viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
         viewModel.dispatch(SessionAction.PrepareBackgroundDownload(this))
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -64,8 +64,16 @@ class MainActivity : AppCompatActivity() {
                     appInfo = appInfo,
                     isMetered = { NetworkCost.isMetered(context) },
                     hasPersonalKey = BuildConfig.MELANGE_PERSONAL_KEY.isNotEmpty(),
+                    onOpenVoiceInputSettings = ::openVoiceInputSettings,
                 )
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
         }
     }
 
@@ -82,5 +90,14 @@ class MainActivity : AppCompatActivity() {
                 data = Uri.fromParts("package", packageName, null)
             },
         )
+    }
+
+    /** Some OEM builds do not expose the dedicated voice-input settings activity. */
+    private fun openVoiceInputSettings() {
+        val intent = listOf(
+            Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS),
+        ).firstOrNull { it.resolveActivity(packageManager) != null } ?: return
+        runCatching { startActivity(intent) }
     }
 }

@@ -82,6 +82,7 @@ fun TurnTranslateRoot(
     appInfo: AppInfo,
     isMetered: () -> Boolean,
     hasPersonalKey: Boolean,
+    onOpenVoiceInputSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -226,6 +227,7 @@ fun TurnTranslateRoot(
                         state = state,
                         onAction = ::handle,
                         onOpenAppSettings = onOpenAppSettings,
+                        onOpenVoiceInputSettings = onOpenVoiceInputSettings,
                         onOpenSettingsDrawer = { scope.launch { drawerState.open() } },
                         onCopyBubble = { item ->
                             item.copyableText?.let { copy(it, bubbleCopiedToast, copyToast) }

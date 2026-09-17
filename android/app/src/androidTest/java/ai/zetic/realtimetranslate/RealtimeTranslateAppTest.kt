@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -148,9 +149,64 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Reading language").assertExists()
         composeRule.onNodeWithText("Spoken language").assertExists()
         composeRule.onNodeWithText("Automatic (device recognizer)").assertExists()
-        composeRule.onNodeWithText("French").performClick()
+        composeRule.onNodeWithText("French").performScrollTo().performClick()
 
         assertEquals(UiAction.SelectReading(Speaker.A, HyMt2Languages.all.first { it.code == "fr" }), action)
+    }
+
+    @Test fun KoreanDownloadRequiredOpensVoiceInputSettingsInsteadOfSelecting() {
+        var action: UiAction? = null
+        var settingsOpened = false
+        val korean = SpeechLanguage.Installed(
+            "ko-KR",
+            "Korean (South Korea)",
+            SpeechLanguage.OnDeviceStatus.DownloadRequired,
+        )
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
+            onAction = { action = it },
+            onOpenVoiceInputSettings = { settingsOpened = true },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Korean offline model download required").assertIsDisplayed()
+        composeRule.onNodeWithText("Korean (South Korea)").performClick()
+
+        assertTrue(settingsOpened)
+        assertEquals(null, action)
+    }
+
+    @Test fun readyKoreanCandidateIsVisibleAndSelectable() {
+        var action: UiAction? = null
+        val korean = SpeechLanguage.Installed("ko-KR", "Korean (South Korea)")
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
+            onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Korean (South Korea)").assertIsDisplayed().performClick()
+
+        assertEquals(UiAction.SelectInput(Speaker.A, korean), action)
+    }
+
+    @Test fun Android12KoreanCandidateRemainsSelectableWithOfflineModelGuidance() {
+        var action: UiAction? = null
+        val korean = SpeechLanguage.Installed(
+            "ko-KR",
+            "Korean (South Korea)",
+            SpeechLanguage.OnDeviceStatus.Unverified,
+        )
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, korean)),
+            onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Korean speech requires its offline model. Manage it in Android voice input settings.").assertIsDisplayed()
+        composeRule.onNodeWithText("Korean (South Korea)").performClick()
+
+        assertEquals(UiAction.SelectInput(Speaker.A, korean), action)
     }
 
     @Test fun bottomBarHoldsOnlyThePushToTalkControlsAndSessionAction() {
@@ -284,6 +340,12 @@ class RealtimeTranslateAppTest {
         assertTrue(explicit.getBooleanExtra(android.speech.RecognizerIntent.EXTRA_PREFER_OFFLINE, false))
         assertEquals("fr-FR", explicit.getStringExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE))
         assertTrue(automatic.getBooleanExtra(android.speech.RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, false))
+
+        val korean = OnDeviceRecognitionIntentFactory.create(
+            SpeechLanguage.Installed("ko-KR", "Korean (South Korea)"),
+            35,
+        )
+        assertEquals("ko-KR", korean.getStringExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE))
     }
 
     @Test fun viewModelEnforcesMutualExclusionRoutesTargetsAndRecoversAfterTranslationGate() {
@@ -324,8 +386,17 @@ class RealtimeTranslateAppTest {
         assertEquals("ko", viewModel.state.value.conversations.last().targetLanguage.code)
     }
 
-    private fun setApp(state: SessionUiState, onAction: (UiAction) -> Unit = {}, onOpenAppSettings: () -> Unit = {}) {
-        composeRule.setContent { RealtimeTranslateTheme { RealtimeTranslateApp(state, onAction, onOpenAppSettings) } }
+    private fun setApp(
+        state: SessionUiState,
+        onAction: (UiAction) -> Unit = {},
+        onOpenAppSettings: () -> Unit = {},
+        onOpenVoiceInputSettings: () -> Unit = {},
+    ) {
+        composeRule.setContent {
+            RealtimeTranslateTheme {
+                RealtimeTranslateApp(state, onAction, onOpenAppSettings, onOpenVoiceInputSettings)
+            }
+        }
     }
 
     private companion object {

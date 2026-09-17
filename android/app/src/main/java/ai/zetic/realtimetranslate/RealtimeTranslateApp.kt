@@ -149,6 +149,7 @@ fun RealtimeTranslateApp(
     state: SessionUiState,
     onAction: (UiAction) -> Unit,
     onOpenAppSettings: () -> Unit = {},
+    onOpenVoiceInputSettings: () -> Unit = {},
     onOpenSettingsDrawer: () -> Unit = {},
     onCopyBubble: (ConversationItem) -> Unit = {},
     copyToast: ToastState? = null,
@@ -160,7 +161,7 @@ fun RealtimeTranslateApp(
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
         Header(state, onOpenSettingsDrawer)
-        LanguageBar(state, onAction)
+        LanguageBar(state, onAction, onOpenVoiceInputSettings)
         SessionBanner(state, onAction, onOpenAppSettings)
         // The copy confirmation is anchored to the bottom of the transcript rather than the bottom
         // of the screen, so it never lands on top of the push-to-talk row or the session action.
@@ -248,14 +249,18 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
 }
 
 /** One chip per speaker, mirroring the side their chat bubbles appear on. */
-@Composable private fun LanguageBar(state: SessionUiState, onAction: (UiAction) -> Unit) {
+@Composable private fun LanguageBar(
+    state: SessionUiState,
+    onAction: (UiAction) -> Unit,
+    onOpenVoiceInputSettings: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SpeakerLanguageChip(Speaker.A, state, onAction, Modifier.weight(1f, fill = false))
-        SpeakerLanguageChip(Speaker.B, state, onAction, Modifier.weight(1f, fill = false))
+        SpeakerLanguageChip(Speaker.A, state, onAction, onOpenVoiceInputSettings, Modifier.weight(1f, fill = false))
+        SpeakerLanguageChip(Speaker.B, state, onAction, onOpenVoiceInputSettings, Modifier.weight(1f, fill = false))
     }
     HorizontalDivider(color = DividerLine)
 }
@@ -264,6 +269,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     speaker: Speaker,
     state: SessionUiState,
     onAction: (UiAction) -> Unit,
+    onOpenVoiceInputSettings: () -> Unit,
     modifier: Modifier,
 ) {
     val settings = state.settingsFor(speaker)
@@ -303,6 +309,52 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+            MenuSectionHeader(stringResource(R.string.menu_spoken_language))
+            val spokenLanguages = SpeechLanguageMenuOrdering.order(
+                candidates = state.speechLanguages,
+                pinned = listOf(settings.inputLanguage, state.settingsFor(speaker.other()).inputLanguage),
+                deviceLanguageCode = deviceLanguageCode,
+                automaticName = stringResource(R.string.speech_language_automatic),
+                locale = locale,
+            )
+            spokenLanguages.forEach { language ->
+                val status = (language as? SpeechLanguage.Installed)?.onDeviceStatus
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(language.displayName.text())
+                            speechLanguageStatusLabel(status)?.let {
+                                Text(it, color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        if (status == null || status.isSelectable) {
+                            onAction(UiAction.SelectInput(speaker, language))
+                        } else {
+                            onOpenVoiceInputSettings()
+                        }
+                    },
+                )
+            }
+            if (spokenLanguages.any { language ->
+                    (language as? SpeechLanguage.Installed)?.onDeviceStatus?.let {
+                        it != SpeechLanguage.OnDeviceStatus.Ready
+                    } == true
+                }) {
+                HorizontalDivider(color = DividerLine)
+                Text(
+                    stringResource(R.string.speech_korean_model_guidance),
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+                TextButton(onClick = { expanded = false; onOpenVoiceInputSettings() }) {
+                    Text(stringResource(R.string.speech_open_voice_input_settings))
+                }
+            }
+            HorizontalDivider(color = DividerLine)
             MenuSectionHeader(stringResource(R.string.menu_reading_language))
             LanguageMenuOrdering.order(
                 candidates = HyMt2Languages.all,
@@ -315,22 +367,16 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
                     onClick = { expanded = false; onAction(UiAction.SelectReading(speaker, language)) },
                 )
             }
-            HorizontalDivider(color = DividerLine)
-            MenuSectionHeader(stringResource(R.string.menu_spoken_language))
-            SpeechLanguageMenuOrdering.order(
-                candidates = state.speechLanguages,
-                pinned = listOf(settings.inputLanguage, state.settingsFor(speaker.other()).inputLanguage),
-                deviceLanguageCode = deviceLanguageCode,
-                automaticName = stringResource(R.string.speech_language_automatic),
-                locale = locale,
-            ).forEach { language ->
-                DropdownMenuItem(
-                    text = { Text(language.displayName.text()) },
-                    onClick = { expanded = false; onAction(UiAction.SelectInput(speaker, language)) },
-                )
-            }
         }
     }
+}
+
+@Composable
+private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): String? = when (status) {
+    SpeechLanguage.OnDeviceStatus.Unverified -> stringResource(R.string.speech_model_status_unverified)
+    SpeechLanguage.OnDeviceStatus.DownloadRequired -> stringResource(R.string.speech_model_status_download_required)
+    SpeechLanguage.OnDeviceStatus.DownloadPending -> stringResource(R.string.speech_model_status_download_pending)
+    SpeechLanguage.OnDeviceStatus.Ready, null -> null
 }
 
 @Composable private fun MenuSectionHeader(label: String) {

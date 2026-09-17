@@ -28,6 +28,11 @@
     <string name="language_chip_accessibility">Speaker %1$s languages: reads %2$s, speaks %3$s</string>
     <string name="menu_reading_language">Reading language</string>
     <string name="menu_spoken_language">Spoken language</string>
+    <string name="speech_model_status_unverified">Offline model availability cannot be checked on this Android version</string>
+    <string name="speech_model_status_download_required">Korean offline model download required</string>
+    <string name="speech_model_status_download_pending">Korean offline model download pending</string>
+    <string name="speech_korean_model_guidance">Korean speech requires its offline model. Manage it in Android voice input settings.</string>
+    <string name="speech_open_voice_input_settings">Open voice input settings</string>
 
     <!-- Session banner -->
     <string name="banner_permission_body">Zetic Relay needs microphone access to recognize speech on this device.</string>

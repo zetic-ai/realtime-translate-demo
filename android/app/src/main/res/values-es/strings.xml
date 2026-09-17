@@ -25,6 +25,11 @@
     <string name="language_chip_accessibility">Idiomas del hablante %1$s: lee %2$s, habla %3$s</string>
     <string name="menu_reading_language">Idioma de lectura</string>
     <string name="menu_spoken_language">Idioma hablado</string>
+    <string name="speech_model_status_unverified">Esta versión de Android no permite comprobar el modelo sin conexión</string>
+    <string name="speech_model_status_download_required">Se necesita descargar el modelo de coreano sin conexión</string>
+    <string name="speech_model_status_download_pending">La descarga del modelo de coreano sin conexión está pendiente</string>
+    <string name="speech_korean_model_guidance">La voz en coreano necesita su modelo sin conexión. Gestiónalo en los ajustes de entrada de voz de Android.</string>
+    <string name="speech_open_voice_input_settings">Abrir ajustes de entrada de voz</string>
 
     <!-- Session banner -->
     <string name="banner_permission_body">Zetic Relay necesita acceso al micrófono para reconocer la voz en este dispositivo.</string>

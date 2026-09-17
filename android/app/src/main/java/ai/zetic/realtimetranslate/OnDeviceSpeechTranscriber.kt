@@ -133,7 +133,7 @@ data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val 
 object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
     override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic)))
+            onResult(SpeechLanguageCatalogResult(SpeechLanguageCatalogMapping.legacy()))
             return
         }
         if (!AndroidOnDeviceSpeechRecognizerPlatform.isOnDeviceRecognitionAvailable(context)) {
@@ -146,7 +146,11 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
             context.mainExecutor,
             object : RecognitionSupportCallback {
                 override fun onSupportResult(support: RecognitionSupport) {
-                    val languages = SpeechLanguageCatalogMapping.installed(support.installedOnDeviceLanguages)
+                    val languages = SpeechLanguageCatalogMapping.onDevice(
+                        installedTags = support.installedOnDeviceLanguages,
+                        supportedTags = support.supportedOnDeviceLanguages,
+                        pendingTags = support.pendingOnDeviceLanguages,
+                    )
                     recognizer.destroy()
                     onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic) + languages))
                 }
@@ -161,6 +165,8 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
 }
 
 object SpeechLanguageCatalogMapping {
+    const val KOREAN_LANGUAGE_TAG = "ko-KR"
+
     /**
      * The spoken-language names come from the platform, which already localizes them, so the list
      * is built in the app's current language rather than pinned to English. [displayLocale] is a
@@ -169,10 +175,46 @@ object SpeechLanguageCatalogMapping {
     fun installed(tags: List<String>, displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage.Installed> =
         tags.map { installedLanguage(it, displayLocale) }.distinctBy { it.languageTag }.sortedBy { it.name }
 
+    /** Android 12 cannot report recognition support, so Korean remains selectable but explicit. */
+    fun legacy(displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage> = listOf(
+        SpeechLanguage.Automatic,
+        korean(SpeechLanguage.OnDeviceStatus.Unverified, displayLocale),
+    )
+
+    /**
+     * Android 13+ reports installed, supported, and pending on-device languages separately. Keep
+     * every installed language and add the explicit Korean locale when its model can be prepared.
+     */
+    fun onDevice(
+        installedTags: List<String>,
+        supportedTags: List<String>,
+        pendingTags: List<String>,
+        displayLocale: Locale = Locale.getDefault(),
+    ): List<SpeechLanguage.Installed> {
+        val installed = installed(installedTags, displayLocale)
+            .filterNot { it.languageTag.isKoreanLocale() }
+        val koreanStatus = when {
+            installedTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.Ready
+            pendingTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.DownloadPending
+            supportedTags.hasKoreanLocale() -> SpeechLanguage.OnDeviceStatus.DownloadRequired
+            else -> null
+        }
+        return (installed + listOfNotNull(koreanStatus?.let { korean(it, displayLocale) })).sortedBy { it.name }
+    }
+
     private fun installedLanguage(tag: String, displayLocale: Locale): SpeechLanguage.Installed {
         val locale = Locale.forLanguageTag(tag)
         return SpeechLanguage.Installed(tag, locale.getDisplayName(displayLocale).ifBlank { tag })
     }
+
+    private fun korean(status: SpeechLanguage.OnDeviceStatus, displayLocale: Locale): SpeechLanguage.Installed =
+        installedLanguage(KOREAN_LANGUAGE_TAG, displayLocale).copy(onDeviceStatus = status)
+
+    private fun List<String>.hasKoreanLocale(): Boolean =
+        any { it.isKoreanLocale() }
+
+    private fun String.isKoreanLocale(): Boolean =
+        equals(KOREAN_LANGUAGE_TAG, ignoreCase = true)
 }
 
 /**
@@ -185,6 +227,7 @@ object SpokenLanguageMatching {
     fun match(reading: TranslationLanguage, available: List<SpeechLanguage>): SpeechLanguage.Installed? {
         val primary = primarySubtag(reading.code) ?: return null
         val matches = available.filterIsInstance<SpeechLanguage.Installed>()
+            .filter { it.onDeviceStatus.isSelectable }
             .filter { primarySubtag(it.languageTag) == primary }
         if (matches.size <= 1) return matches.firstOrNull()
         val implied = variantSubtags(reading.code) + likelyVariants.getOrElse(reading.code) { emptySet() }

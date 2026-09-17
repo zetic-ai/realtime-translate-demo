@@ -11,6 +11,13 @@ enum class Speaker(val label: String) {
 sealed interface SpeechLanguage {
     val displayName: UiText
 
+    enum class OnDeviceStatus(val isSelectable: Boolean) {
+        Ready(true),
+        Unverified(true),
+        DownloadRequired(false),
+        DownloadPending(false),
+    }
+
     data object Automatic : SpeechLanguage {
         override val displayName: UiText get() = UiText.res(R.string.speech_language_automatic)
     }
@@ -19,7 +26,11 @@ sealed interface SpeechLanguage {
      * [name] comes from the platform's own locale display names, already in the app's language, so
      * it is carried as text rather than as a key.
      */
-    data class Installed(val languageTag: String, val name: String) : SpeechLanguage {
+    data class Installed(
+        val languageTag: String,
+        val name: String,
+        val onDeviceStatus: OnDeviceStatus = OnDeviceStatus.Ready,
+    ) : SpeechLanguage {
         override val displayName: UiText get() = UiText.raw(name)
     }
 }
