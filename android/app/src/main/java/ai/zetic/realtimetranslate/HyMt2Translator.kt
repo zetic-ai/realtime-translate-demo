@@ -3,8 +3,8 @@ package ai.zetic.realtimetranslate
 import android.content.Context
 import com.zeticai.mlange.core.model.llm.LLMModelMode
 import com.zeticai.mlange.core.model.llm.LLMNextTokenResult
-import com.zeticai.mlange.core.model.llm.LLMRunResult
 import com.zeticai.mlange.core.model.llm.ZeticMLangeLLMModel
+import com.zeticai.mlange.core.utils.error.ZeticMLangeException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -28,7 +28,7 @@ interface HyMt2Translator {
 }
 
 interface HyMt2ModelSession {
-    fun run(prompt: String): LLMRunResult
+    fun run(prompt: String)
     fun waitForNextToken(): LLMNextTokenResult
     fun cleanUp()
     fun close()
@@ -42,7 +42,7 @@ class MelangeHyMt2Translator(
                 context = context,
                 personalKey = personalKey,
                 name = MODEL_NAME,
-                version = null,
+                version = MODEL_VERSION,
                 modelMode = LLMModelMode.RUN_AUTO,
                 onDownload = onProgress,
             ),
@@ -62,7 +62,9 @@ class MelangeHyMt2Translator(
         inferenceMutex.withLock {
             val loadedModel = model ?: throw TranslationFailure(UiText.res(R.string.error_model_not_loaded))
             try {
-                if (loadedModel.run(prompt).status != 0) {
+                try {
+                    loadedModel.run(prompt)
+                } catch (_: ZeticMLangeException) {
                     throw TranslationFailure(UiText.res(R.string.error_model_start_failed))
                 }
                 buildString {
@@ -99,6 +101,7 @@ class MelangeHyMt2Translator(
 
     companion object {
         const val MODEL_NAME = "SJ_zetic/Hy-MT2-1.8B"
+        const val MODEL_VERSION = 1
     }
 }
 

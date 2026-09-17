@@ -3,19 +3,27 @@ package ai.zetic.realtimetranslate
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.zeticai.mlange.core.background.BackgroundDownloadState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -107,16 +115,18 @@ class RealtimeTranslateAppTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Newest appended card:", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithTag(CONVERSATION_BOTTOM_TAG).assertIsDisplayed()
     }
 
     @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithText("Zetic Relay").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("ZETIC").assertIsDisplayed()
+        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
 
-        val title = composeRule.onNodeWithText("Zetic Relay").fetchSemanticsNode().boundsInRoot
-        val wordmark = composeRule.onNodeWithContentDescription("ZETIC").fetchSemanticsNode().boundsInRoot
-        assertTrue(title.left < wordmark.left)
+        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
+        val settings = composeRule.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot
+        assertTrue(title.right < settings.left)
+        assertTrue(settings.width >= 44 * composeRule.activity.resources.displayMetrics.density)
     }
 
     @Test fun topLanguageBarShowsOneChipPerSpeakerMirroringBubbleSides() {
@@ -139,9 +149,138 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Reading language").assertExists()
         composeRule.onNodeWithText("Spoken language").assertExists()
         composeRule.onNodeWithText("Automatic (device recognizer)").assertExists()
-        composeRule.onNodeWithText("French").performClick()
+        composeRule.onNodeWithText("French").performScrollTo().performClick()
 
         assertEquals(UiAction.SelectReading(Speaker.A, HyMt2Languages.all.first { it.code == "fr" }), action)
+    }
+
+    @Test fun downloadableSpeechPackRequestsOnlyTheChosenLanguage() {
+        var action: UiAction? = null
+        val french = SpeechLanguage.Installed(
+            "fr-CA",
+            "French (Canada)",
+            SpeechLanguage.OnDeviceStatus.DownloadRequired,
+        )
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, french)),
+            onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Available to download").assertIsDisplayed()
+        composeRule.onNodeWithText("Download speech pack").assertIsDisplayed()
+        composeRule.onNodeWithText("French (Canada)").performClick()
+
+        assertEquals(UiAction.RequestSpeechModelDownload(french), action)
+    }
+
+    @Test fun readySpeechPackIsVisibleAndSelectable() {
+        var action: UiAction? = null
+        val spanish = SpeechLanguage.Installed("es-MX", "Spanish (Mexico)")
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, spanish)),
+            onAction = { action = it },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Spanish (Mexico)").assertIsDisplayed().performClick()
+
+        assertEquals(UiAction.SelectInput(Speaker.A, spanish), action)
+    }
+
+    @Test fun pendingSpeechPackIsGroupedAndCannotRequestAgain() {
+        var actions = 0
+        val japanese = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        setApp(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, japanese)),
+            onAction = { actions += 1 },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Downloading").assertIsDisplayed()
+        composeRule.onNodeWithText("Downloading speech pack").assertIsDisplayed()
+        composeRule.onNodeWithText("Japanese (Japan)").assertIsNotEnabled()
+
+        assertEquals(0, actions)
+    }
+
+    @Test fun pendingSpeechPackRechecksStopWhenThePackBecomesReady() {
+        val pending = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        val state = mutableStateOf(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, pending)),
+        )
+        val actions = mutableListOf<UiAction>()
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            RefreshPendingSpeechPacks(state.value, actions::add)
+        }
+
+        composeRule.mainClock.advanceTimeBy(SPEECH_PACK_RECHECK_INTERVAL_MILLIS + 1)
+        composeRule.waitForIdle()
+        assertEquals(listOf(UiAction.RefreshSpeechLanguages), actions)
+
+        composeRule.runOnUiThread {
+            state.value = state.value.copy(
+                speechLanguages = listOf(
+                    SpeechLanguage.Automatic,
+                    pending.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.Ready),
+                ),
+            )
+        }
+        composeRule.waitForIdle()
+        val stoppedAt = actions.size
+        composeRule.mainClock.advanceTimeBy(SPEECH_PACK_RECHECK_INTERVAL_MILLIS * 2)
+        composeRule.waitForIdle()
+
+        assertEquals(stoppedAt, actions.size)
+    }
+
+    @Test fun pendingSpeechPackRechecksAreBounded() {
+        val pending = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        val actions = mutableListOf<UiAction>()
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            RefreshPendingSpeechPacks(
+                SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, pending)),
+                actions::add,
+            )
+        }
+
+        composeRule.mainClock.advanceTimeBy(
+            SPEECH_PACK_RECHECK_INTERVAL_MILLIS * (SPEECH_PACK_RECHECK_ATTEMPTS + 2),
+        )
+        composeRule.waitForIdle()
+
+        assertEquals(SPEECH_PACK_RECHECK_ATTEMPTS, actions.size)
+    }
+
+    @Test fun failedSpeechPackRequestOffersVoiceInputSettingsFallback() {
+        var settingsOpened = false
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                speechModelDownloadError = UiText.res(R.string.speech_model_download_failed),
+            ),
+            onOpenVoiceInputSettings = { settingsOpened = true },
+        )
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Android could not start this speech pack download.").assertIsDisplayed()
+        composeRule.onNodeWithText("Open voice input settings").performClick()
+
+        assertTrue(settingsOpened)
     }
 
     @Test fun bottomBarHoldsOnlyThePushToTalkControlsAndSessionAction() {
@@ -149,8 +288,58 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithContentDescription("Start speaker A").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Start speaker B").assertIsEnabled()
         composeRule.onNodeWithContentDescription("End session").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Type a message").assertIsEnabled()
         composeRule.onNodeWithText("Speaks").assertDoesNotExist()
         composeRule.onNodeWithText("Reads").assertDoesNotExist()
+    }
+
+    @Test fun typedInputSelectsSpeakerAndDispatchesTrimmedText() {
+        var action: UiAction? = null
+        setApp(readyConversationState(), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNodeWithText("Who is speaking?").assertIsDisplayed()
+        composeRule.onNodeWithText("B", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Message").performTextInput("  typed hello  ")
+        composeRule.onNodeWithText("Send").performClick()
+
+        assertEquals(UiAction.SubmitTyped("typed hello", Speaker.B), action)
+    }
+
+    @Test fun typedInputRemembersSpeakerFocusesFieldAndNamesTheTypingLanguage() {
+        var action: UiAction? = null
+        setApp(readyConversationState(), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused()
+        composeRule.onNodeWithText("B", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.onNodeWithText("What speaker B wants to say in Korean").assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused().performTextInput("again")
+        composeRule.onNodeWithText("Send").performClick()
+
+        assertEquals(UiAction.SubmitTyped("again", Speaker.B), action)
+    }
+
+    @Test fun failedBubbleOffersPerBubbleRetry() {
+        var action: UiAction? = null
+        val failed = item(Speaker.A, "hello", true).copy(translationError = UiText.raw("offline"))
+        setApp(readyConversationState().copy(conversations = listOf(failed)), onAction = { action = it })
+
+        composeRule.onNodeWithText("Retry translation").performClick()
+
+        assertEquals(UiAction.RetryTranslation(failed.id), action)
+    }
+
+    @Test fun modelPreparationCanBeCancelled() {
+        var action: UiAction? = null
+        setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f), onAction = { action = it })
+
+        composeRule.onAllNodesWithContentDescription("Cancel")[0].performClick()
+
+        assertEquals(UiAction.CancelModelPreparation, action)
     }
 
     @Test fun idleMainScreenStartsInOneTapAndKeepsPushToTalkLocked() {
@@ -170,10 +359,42 @@ class RealtimeTranslateAppTest {
 
     @Test fun modelLoadingRendersInlineAndLocksLanguageChips() {
         setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f))
-        composeRule.onNodeWithText("Loading translation model 50%").assertIsDisplayed()
+        composeRule.onNodeWithText("Model download in progress 50%").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun cachedModelLoadShowsIndeterminateLoadingWithoutDownloadPercentage() {
+        setApp(SessionUiState(SessionPhase.LoadingModel))
+
+        composeRule.onNodeWithText("Loading translation model").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading translation model 0%").assertDoesNotExist()
+        composeRule.onNodeWithText("Model download in progress 0%").assertDoesNotExist()
+        composeRule.onNodeWithText("Downloading translation model 0%").assertDoesNotExist()
+    }
+
+    @Test fun unknownDownloadProgressDoesNotMisrepresentItAsZeroPercent() {
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                backgroundDownload = ModelDownloadUiState(BackgroundDownloadState.DOWNLOADING),
+            ),
+        )
+
+        composeRule.onAllNodesWithText("Model download in progress")[0].assertIsDisplayed()
+        composeRule.onNodeWithText("Model download in progress 0%").assertDoesNotExist()
+    }
+
+    @Test fun knownDownloadProgressKeepsItsNumericPercentage() {
+        setApp(
+            SessionUiState(
+                SessionPhase.Ready,
+                backgroundDownload = ModelDownloadUiState(BackgroundDownloadState.DOWNLOADING, progress = 0.42f),
+            ),
+        )
+
+        composeRule.onNodeWithText("Model download in progress 42%").assertIsDisplayed()
     }
 
     @Test fun modelLoadFailureOffersInlineRetryOnTheMainScreen() {
@@ -202,6 +423,12 @@ class RealtimeTranslateAppTest {
         assertTrue(explicit.getBooleanExtra(android.speech.RecognizerIntent.EXTRA_PREFER_OFFLINE, false))
         assertEquals("fr-FR", explicit.getStringExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE))
         assertTrue(automatic.getBooleanExtra(android.speech.RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, false))
+
+        val korean = OnDeviceRecognitionIntentFactory.create(
+            SpeechLanguage.Installed("ko-KR", "Korean (South Korea)"),
+            35,
+        )
+        assertEquals("ko-KR", korean.getStringExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE))
     }
 
     @Test fun viewModelEnforcesMutualExclusionRoutesTargetsAndRecoversAfterTranslationGate() {
@@ -242,8 +469,17 @@ class RealtimeTranslateAppTest {
         assertEquals("ko", viewModel.state.value.conversations.last().targetLanguage.code)
     }
 
-    private fun setApp(state: SessionUiState, onAction: (UiAction) -> Unit = {}, onOpenAppSettings: () -> Unit = {}) {
-        composeRule.setContent { RealtimeTranslateTheme { RealtimeTranslateApp(state, onAction, onOpenAppSettings) } }
+    private fun setApp(
+        state: SessionUiState,
+        onAction: (UiAction) -> Unit = {},
+        onOpenAppSettings: () -> Unit = {},
+        onOpenVoiceInputSettings: () -> Unit = {},
+    ) {
+        composeRule.setContent {
+            RealtimeTranslateTheme {
+                RealtimeTranslateApp(state, onAction, onOpenAppSettings, onOpenVoiceInputSettings)
+            }
+        }
     }
 
     private companion object {

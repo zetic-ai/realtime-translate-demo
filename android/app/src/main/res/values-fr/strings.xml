@@ -19,21 +19,27 @@
     <string name="status_translating">Traduction pour %1$s</string>
     <string name="status_error">Une erreur est survenue</string>
     <string name="status_accessibility">État de la session : %1$s</string>
-    <string name="speech_catalog_loading">Vérification des langues installées</string>
+    <string name="speech_catalog_loading">Vérification des langues disponibles sur l’appareil</string>
 
     <!-- Header and language bar -->
-    <string name="zetic_opens_settings">ZETIC, ouvre les réglages</string>
     <string name="speech_language_automatic">Automatique (reconnaissance de l’appareil)</string>
     <string name="language_chip_accessibility">Langues de l’interlocuteur %1$s : lit %2$s, parle %3$s</string>
     <string name="menu_reading_language">Langue de lecture</string>
     <string name="menu_spoken_language">Langue parlée</string>
+    <string name="speech_model_status_download_required">Télécharger le pack vocal</string>
+    <string name="speech_model_status_download_pending">Téléchargement du pack vocal</string>
+    <string name="speech_model_group_downloading">Téléchargement en cours</string>
+    <string name="speech_model_group_available">Disponible au téléchargement</string>
+    <string name="speech_model_download_guidance">Les packs vocaux sont téléchargés uniquement lorsque vous en choisissez un.</string>
+    <string name="speech_model_download_failed">Android n’a pas pu lancer le téléchargement de ce pack vocal.</string>
+    <string name="speech_open_voice_input_settings">Ouvrir les réglages de saisie vocale</string>
 
     <!-- Session banner -->
     <string name="banner_permission_body">Zetic Relay a besoin du micro pour reconnaître la parole sur cet appareil.</string>
     <string name="banner_open_app_settings">Ouvrir les Paramètres</string>
     <string name="banner_allow_microphone">Autoriser le micro</string>
     <string name="banner_request_permission_accessibility">Demander l’autorisation du micro</string>
-    <string name="banner_loading_model">Chargement du modèle de traduction %1$d %%</string>
+    <string name="banner_loading_model">Chargement du modèle de traduction</string>
     <string name="banner_controls_unlock">Les commandes s’activent quand le modèle est prêt.</string>
     <string name="banner_retry_model_load">Recharger le modèle</string>
     <string name="banner_model_download_in_progress">Téléchargement du modèle en cours %1$d %%</string>
@@ -50,7 +56,10 @@
     <string name="bubble_destination">Vers %1$s - %2$s</string>
     <string name="bubble_translation_pending">Traduction en attente</string>
     <string name="bubble_recognizing">Reconnaissance en cours</string>
+    <string name="bubble_listening">Écoute en cours</string>
     <string name="bubble_copy_action">Copier</string>
+    <string name="retry_translation">Réessayer la traduction</string>
+    <string name="jump_to_latest">Aller au plus récent</string>
     <string name="toast_copied">Copié</string>
 
     <!-- Bottom bar -->
@@ -60,23 +69,30 @@
     <string name="hint_resolve_error">Corrigez l’erreur ci-dessus pour continuer.</string>
     <string name="hint_start_conversation">Touchez « Démarrer la conversation » pour charger le modèle de traduction.</string>
     <string name="hint_other_speaker_active">L’interlocuteur %1$s ne peut pas parler tant que %2$s a la parole.</string>
-    <string name="hint_push_to_talk">Maintenez un bouton pour parler, ou touchez pour lancer puis arrêter.</string>
+    <string name="hint_push_to_talk">Touchez un bouton pour parler, puis touchez-le à nouveau pour arrêter.</string>
     <string name="ptt_start">Démarrer le tour de parole de %1$s</string>
     <string name="ptt_stop">Terminer le tour de parole de %1$s</string>
     <string name="ptt_blocked_by_other">L’interlocuteur %1$s ne peut pas commencer tant que l’interlocuteur %2$s a la parole</string>
     <string name="ptt_blocked_model_not_ready">Le bouton de parole de l’interlocuteur %1$s s’active quand le modèle est prêt</string>
-    <string name="ptt_caption_idle">" - maintenir pour parler"</string>
-    <string name="ptt_caption_recording">" - enregistrement, relâcher pour arrêter"</string>
+    <string name="ptt_caption_idle">" - toucher pour parler"</string>
+    <string name="ptt_caption_recording">" - enregistrement, toucher pour arrêter"</string>
     <string name="session_start">Démarrer la conversation</string>
     <string name="session_end">Terminer la session</string>
+    <string name="session_cancel">Annuler</string>
+    <string name="typed_input_action">Saisir un message</string>
+    <string name="typed_input_title">Saisir un message</string>
+    <string name="typed_input_speaker">Qui parle ?</string>
+    <string name="typed_input_guidance">L’interlocuteur %1$s écrit en %2$s. L’interlocuteur %3$s lit la traduction en %4$s.</string>
+    <string name="typed_input_message">Message</string>
+    <string name="typed_input_placeholder">Ce que l’interlocuteur %1$s veut dire en %2$s</string>
+    <string name="typed_input_cancel">Annuler</string>
+    <string name="typed_input_send">Envoyer</string>
+    <string name="audio_interrupted_notice">Le son a été interrompu. Touchez le bouton de l’interlocuteur et réessayez.</string>
+    <string name="no_speech_notice">Aucune parole détectée. Réessayez.</string>
 
     <!-- Spoken translation -->
-    <string name="sound_on_label">Traduction vocale activée</string>
-    <string name="sound_off_label">Traduction vocale désactivée</string>
-    <string name="sound_on_hint">Désactive la traduction vocale.</string>
-    <string name="sound_off_hint">Active la traduction vocale.</string>
     <string name="replay_label">Lire la traduction</string>
-    <string name="replay_hint">Lit à nouveau cette traduction à voix haute.</string>
+    <string name="replay_hint">Lit cette traduction à voix haute.</string>
 
     <!-- Settings drawer -->
     <string name="settings_title">Réglages</string>
@@ -112,7 +128,7 @@
     <string name="first_run_welcome_privacy">Reconnaissance vocale et traduction se font sur ce téléphone. Rien n’est envoyé à un serveur.</string>
     <string name="first_run_welcome_action">Commencer</string>
     <string name="first_run_priming_title">Micro et reconnaissance vocale</string>
-    <string name="first_run_priming_microphone">Micro : pour entendre la personne qui maintient un bouton.</string>
+    <string name="first_run_priming_microphone">Micro : pour entendre la personne qui touche son bouton.</string>
     <string name="first_run_priming_speech">Reconnaissance vocale : pour transformer ce son en texte.</string>
     <string name="first_run_priming_privacy">Les deux fonctionnent sur ce téléphone. Aucun son ni aucun texte ne quitte l’appareil.</string>
     <string name="first_run_priming_next">Android vous demandera ensuite le micro.</string>
@@ -128,10 +144,11 @@
     <!-- Speech recognition failures -->
     <string name="speech_error_main_thread">La reconnaissance vocale sur l’appareil doit démarrer sur le thread principal Android.</string>
     <string name="speech_error_recognition_failed">Échec de la reconnaissance vocale sur l’appareil (erreur %1$d).</string>
-    <string name="speech_error_android_version">Cet appareil nécessite Android 12 (API 31) ou une version plus récente pour la reconnaissance vocale sur l’appareil.</string>
+    <string name="speech_error_android_version">Cet appareil nécessite Android 13 (API 33) ou une version plus récente pour la reconnaissance vocale sur l’appareil.</string>
     <string name="speech_error_permission">L’autorisation du micro est requise.</string>
     <string name="speech_error_no_recognizer">Cet appareil n’a pas de reconnaissance vocale sur l’appareil. L’app ne bascule pas vers la reconnaissance en ligne.</string>
     <string name="speech_catalog_no_recognizer">Cet appareil n’a pas de reconnaissance vocale sur l’appareil.</string>
+    <string name="speech_catalog_android_version">La saisie vocale nécessite Android 13 (API 33) ou une version plus récente.</string>
     <string name="speech_catalog_unavailable">La liste des langues installées n’est pas disponible (erreur %1$d).</string>
 
     <!-- Translation failures -->

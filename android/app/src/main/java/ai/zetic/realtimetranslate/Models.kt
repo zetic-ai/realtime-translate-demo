@@ -11,6 +11,12 @@ enum class Speaker(val label: String) {
 sealed interface SpeechLanguage {
     val displayName: UiText
 
+    enum class OnDeviceStatus(val isSelectable: Boolean) {
+        Ready(true),
+        DownloadRequired(false),
+        DownloadPending(false),
+    }
+
     data object Automatic : SpeechLanguage {
         override val displayName: UiText get() = UiText.res(R.string.speech_language_automatic)
     }
@@ -19,7 +25,11 @@ sealed interface SpeechLanguage {
      * [name] comes from the platform's own locale display names, already in the app's language, so
      * it is carried as text rather than as a key.
      */
-    data class Installed(val languageTag: String, val name: String) : SpeechLanguage {
+    data class Installed(
+        val languageTag: String,
+        val name: String,
+        val onDeviceStatus: OnDeviceStatus = OnDeviceStatus.Ready,
+    ) : SpeechLanguage {
         override val displayName: UiText get() = UiText.raw(name)
     }
 }
@@ -68,6 +78,7 @@ data class ConversationItem(
     val transcript: String,
     val isFinal: Boolean,
     val translation: String? = null,
+    val provisionalTranslation: String? = null,
     val translationError: UiText? = null,
 )
 
@@ -77,13 +88,16 @@ data class SessionUiState(
     val settings: Map<Speaker, SpeakerSettings> = defaultSpeakerSettings(),
     val conversations: List<ConversationItem> = emptyList(),
     val conversationStarted: Boolean = false,
-    val modelLoadProgress: Float = 0f,
+    /** Null until the SDK reports that it actually needs to download model data. */
+    val modelLoadProgress: Float? = null,
     val speechLanguages: List<SpeechLanguage> = listOf(SpeechLanguage.Automatic),
     val speechLanguageCatalogLoading: Boolean = false,
     val speechLanguageCatalogMessage: UiText? = null,
+    val speechModelDownloadError: UiText? = null,
     val backgroundDownload: ModelDownloadUiState? = null,
     val modelRemovalMessage: UiText? = null,
     val errorMessage: UiText? = null,
+    val notice: UiText? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)
 

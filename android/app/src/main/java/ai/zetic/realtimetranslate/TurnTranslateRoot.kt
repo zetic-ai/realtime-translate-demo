@@ -33,7 +33,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +83,7 @@ fun TurnTranslateRoot(
     appInfo: AppInfo,
     isMetered: () -> Boolean,
     hasPersonalKey: Boolean,
+    onOpenVoiceInputSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -95,9 +96,6 @@ fun TurnTranslateRoot(
     var primingSeen by remember { mutableStateOf(preferences.permissionPrimingSeen) }
     var consent by remember { mutableStateOf<ConsentPrompt?>(null) }
     var modelRemovalConfirmation by remember { mutableStateOf(false) }
-    // Seeded from the stored preference rather than defaulted, so a launch that starts muted never
-    // speaks before the screen appears.
-    var isMuted by remember { mutableStateOf(preferences.speechMuted) }
     var appLanguage by remember { mutableStateOf(AppLanguageStore.current()) }
 
     val clearedToast = stringResource(R.string.toast_conversation_cleared)
@@ -106,9 +104,9 @@ fun TurnTranslateRoot(
     val languageToast = stringResource(R.string.toast_language_applied)
 
     KeepScreenAwake(state)
+    RefreshPendingSpeechPacks(state, onAction)
     ComfortHaptics(state, haptics)
-    val announcer = rememberSpokenTranslationAnnouncer(state.conversations)
-    SpokenTranslations(state, isMuted, announcer)
+    val speechOutput = rememberSpeechOutput()
 
     // The one honest signal this build has that a model is already on the phone. Written the first
     // time a load succeeds, so the second session never asks for consent to a download that is not
@@ -143,24 +141,25 @@ fun TurnTranslateRoot(
                 when (action) {
                     is UiAction.PttPress -> haptics(HapticEvent.TurnBegan)
                     is UiAction.PttRelease -> haptics(HapticEvent.TurnEnded)
+                    is UiAction.TogglePtt -> haptics(
+                        if (state.activeSpeaker() == action.speaker) HapticEvent.TurnEnded else HapticEvent.TurnBegan,
+                    )
                     else -> Unit
                 }
                 // Nothing is ever spoken while the microphone is open, so a turn beginning stops
                 // speech synchronously before the recognizer starts. Ending a session stops it too.
                 when (action) {
-                    is UiAction.PttPress, is UiAction.TogglePtt, UiAction.EndSession -> announcer.stop()
+                    is UiAction.PttPress,
+                    is UiAction.TogglePtt,
+                    is UiAction.SubmitTyped,
+                    UiAction.EndSession,
+                    UiAction.CancelModelPreparation,
+                    UiAction.ClearConversation -> speechOutput.stop()
                     else -> Unit
                 }
                 onAction(action)
             }
         }
-    }
-
-    /** Muting is what someone reaches for to make the phone stop talking, so it stops it. */
-    fun toggleMute() {
-        isMuted = !isMuted
-        preferences.speechMuted = isMuted
-        if (isMuted) announcer.stop()
     }
 
     /** The drawer stays open: the thing worth seeing afterwards is the row showing the new value. */
@@ -182,7 +181,7 @@ fun TurnTranslateRoot(
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
-                // The wordmark is the only way in. An edge swipe on the transcript is not.
+                // The trailing settings button is the only way in. An edge swipe on the transcript is not.
                 gesturesEnabled = drawerState.isOpen,
                 scrimColor = Scrim,
                 drawerContent = {
@@ -204,7 +203,7 @@ fun TurnTranslateRoot(
                                     onClearConversation = {
                                         // The sentence being spoken belongs to a bubble that is
                                         // going away.
-                                        announcer.stop()
+                                        speechOutput.stop()
                                         onAction(UiAction.ClearConversation)
                                         scope.launch { drawerState.close() }
                                         drawerToast.show(clearedToast)
@@ -230,14 +229,18 @@ fun TurnTranslateRoot(
                         state = state,
                         onAction = ::handle,
                         onOpenAppSettings = onOpenAppSettings,
+                        onOpenVoiceInputSettings = onOpenVoiceInputSettings,
                         onOpenSettingsDrawer = { scope.launch { drawerState.open() } },
                         onCopyBubble = { item ->
                             item.copyableText?.let { copy(it, bubbleCopiedToast, copyToast) }
                         },
                         copyToast = copyToast,
-                        isMuted = isMuted,
-                        onToggleMute = ::toggleMute,
-                        onReplayBubble = { announcer.replay(it, isMuted) },
+                        onReplayBubble = { item ->
+                            when (val decision = SpokenTranslation.decision(item)) {
+                                is SpokenTranslation.Speak -> speechOutput.speak(decision.text, decision.languageCode)
+                                SpokenTranslation.Silent -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -305,6 +308,31 @@ data class ConsentPrompt(val cellularWarning: Boolean)
 
 // region Session comfort shells
 
+internal const val SPEECH_PACK_RECHECK_INTERVAL_MILLIS = 2_000L
+internal const val SPEECH_PACK_RECHECK_ATTEMPTS = 60
+
+/**
+ * Android can acknowledge a speech-pack request before the pack is installed. Recheck only while
+ * this screen is visible, and stop after a bounded window or as soon as no requested pack is
+ * pending. A later foreground transition gets the activity's normal one-shot catalog refresh.
+ */
+@Composable
+internal fun RefreshPendingSpeechPacks(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val pendingTags = state.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+        .filter { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
+        .map { it.languageTag.lowercase(java.util.Locale.ROOT) }
+        .toSet()
+    val shouldRecheck = pendingTags.isNotEmpty() && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    LaunchedEffect(shouldRecheck, pendingTags) {
+        if (!shouldRecheck) return@LaunchedEffect
+        repeat(SPEECH_PACK_RECHECK_ATTEMPTS) {
+            delay(SPEECH_PACK_RECHECK_INTERVAL_MILLIS)
+            onAction(UiAction.RefreshSpeechLanguages)
+        }
+    }
+}
+
 /**
  * Holds the display awake in exactly the states where push-to-talk is on screen, and hands it back
  * the moment the app is backgrounded or the screen goes away.
@@ -325,31 +353,11 @@ private fun KeepScreenAwake(state: SessionUiState) {
  * than left holding an engine connection the process no longer has a use for.
  */
 @Composable
-private fun rememberSpokenTranslationAnnouncer(seed: List<ConversationItem>): SpokenTranslationAnnouncer {
+private fun rememberSpeechOutput(): SpeechOutput {
     val context = LocalContext.current
-    // `seed` is read once, at creation: it is the transcript that is already on screen and must not
-    // be read aloud, not a value the announcer should follow.
-    val initial = rememberUpdatedState(seed)
     val output = remember(context) { AndroidSpeechOutput(context) }
-    val announcer = remember(output) { SpokenTranslationAnnouncer(output).seed(initial.value) }
     DisposableEffect(output) { onDispose { output.shutdown() } }
-    return announcer
-}
-
-/**
- * A translation is spoken exactly once, at the moment its bubble reaches the translated state. The
- * announcer owns which ones those are; this is only the effect that hands it each new transcript.
- */
-@Composable
-private fun SpokenTranslations(
-    state: SessionUiState,
-    isMuted: Boolean,
-    announcer: SpokenTranslationAnnouncer,
-) {
-    val muted = rememberUpdatedState(isMuted)
-    LaunchedEffect(state.conversations) {
-        announcer.onConversationsChanged(state.conversations, muted.value)
-    }
+    return output
 }
 
 /** Turns a [HapticEvent] into the platform feedback the phone's own haptic settings scale. */

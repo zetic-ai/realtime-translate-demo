@@ -8,7 +8,9 @@ import com.zeticai.mlange.core.background.ModelRemovalResult
 import com.zeticai.mlange.core.model.llm.LLMModelMode
 import com.zeticai.mlange.core.model.llm.ZeticMLangeLLMModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -42,10 +44,42 @@ data class ModelDownloadUiState(
  * Keeps the SDK's durable handle beside the explicit consent decision. The SDK owns the transfer
  * itself; this class only schedules, restores, observes, and removes that one model's artifacts.
  */
-class HyMt2BackgroundDownload(
+internal interface ModelDownloadSdk {
+    fun download(context: Context, personalKey: String): BackgroundDownloadHandle
+    fun status(context: Context, handle: BackgroundDownloadHandle): BackgroundDownloadStatus
+    fun stop(context: Context, handle: BackgroundDownloadHandle)
+    fun remove(context: Context): ModelRemovalResult
+}
+
+private object AndroidModelDownloadSdk : ModelDownloadSdk {
+    override fun download(context: Context, personalKey: String) =
+        ZeticMLangeLLMModel.downloadInBackground(
+            context = context,
+            personalKey = personalKey,
+            name = MelangeHyMt2Translator.MODEL_NAME,
+            version = MelangeHyMt2Translator.MODEL_VERSION,
+            modelMode = LLMModelMode.RUN_AUTO,
+        )
+
+    override fun status(context: Context, handle: BackgroundDownloadHandle) =
+        ZeticMLangeLLMModel.getBackgroundDownloadStatus(context, handle)
+
+    override fun stop(context: Context, handle: BackgroundDownloadHandle) {
+        ZeticMLangeLLMModel.stopBackgroundDownload(context, handle)
+    }
+
+    override fun remove(context: Context) = ZeticMLangeLLMModel.removeDownloadedModel(
+        context = context,
+        name = MelangeHyMt2Translator.MODEL_NAME,
+    )
+}
+
+internal class HyMt2BackgroundDownload(
     context: Context,
-    private val preferences: FirstRunPreferences,
+    private val preferences: ModelDownloadPreferenceStore,
     private val personalKey: String,
+    private val sdk: ModelDownloadSdk = AndroidModelDownloadSdk,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val applicationContext = context.applicationContext
     private val operationMutex = Mutex()
@@ -53,7 +87,7 @@ class HyMt2BackgroundDownload(
     val hasConsent: Boolean
         get() = preferences.modelDownloadConsent
 
-    suspend fun scheduleIfConsented(): ModelDownloadUiState? = withContext(Dispatchers.IO) {
+    suspend fun scheduleIfConsented(): ModelDownloadUiState? = withContext(ioDispatcher) {
         if (!hasConsent || personalKey.isBlank()) return@withContext null
         val existing = refresh()
         if (existing != null && (existing.isStatusLookupFailure || existing.isActive || existing.isInstalled)) {
@@ -62,7 +96,7 @@ class HyMt2BackgroundDownload(
         schedule()
     }
 
-    suspend fun grantConsentAndSchedule(): ModelDownloadUiState = withContext(Dispatchers.IO) {
+    suspend fun grantConsentAndSchedule(): ModelDownloadUiState = withContext(ioDispatcher) {
         operationMutex.withLock {
             currentCoroutineContext().ensureActive()
             preferences.modelDownloadConsent = true
@@ -70,13 +104,10 @@ class HyMt2BackgroundDownload(
         }
     }
 
-    suspend fun refresh(): ModelDownloadUiState? = withContext(Dispatchers.IO) {
+    suspend fun refresh(): ModelDownloadUiState? = withContext(ioDispatcher) {
         val handleId = preferences.backgroundDownloadHandleId ?: return@withContext null
         try {
-            val status = ZeticMLangeLLMModel.getBackgroundDownloadStatus(
-                applicationContext,
-                BackgroundDownloadHandle(handleId),
-            )
+            val status = sdk.status(applicationContext, BackgroundDownloadHandle(handleId))
             currentCoroutineContext().ensureActive()
             status.toUiState()
         } catch (error: CancellationException) {
@@ -90,16 +121,24 @@ class HyMt2BackgroundDownload(
         }
     }
 
-    suspend fun removeDownloadedModel(): ModelRemovalResult = withContext(Dispatchers.IO) {
+    suspend fun removeDownloadedModel(): ModelRemovalResult = withContext(ioDispatcher) {
         operationMutex.withLock {
             currentCoroutineContext().ensureActive()
-            val result = ZeticMLangeLLMModel.removeDownloadedModel(
-                context = applicationContext,
-                name = MelangeHyMt2Translator.MODEL_NAME,
-            )
+            val result = sdk.remove(applicationContext)
             currentCoroutineContext().ensureActive()
             if (!result.isInUse) clearConsentAndHandleLocked()
             result
+        }
+    }
+
+    /** Stops the SDK-owned durable transfer. A later explicit start may schedule a fresh one. */
+    suspend fun cancel() = withContext(ioDispatcher) {
+        operationMutex.withLock {
+            val handleId = preferences.backgroundDownloadHandleId ?: return@withLock
+            sdk.stop(applicationContext, BackgroundDownloadHandle(handleId))
+            if (preferences.backgroundDownloadHandleId == handleId) {
+                preferences.backgroundDownloadHandleId = null
+            }
         }
     }
 
@@ -111,29 +150,36 @@ class HyMt2BackgroundDownload(
 
     private suspend fun schedule(): ModelDownloadUiState = operationMutex.withLock { scheduleLocked() }
 
-    private suspend fun scheduleLocked(): ModelDownloadUiState = try {
-        currentCoroutineContext().ensureActive()
-        if (!hasConsent || personalKey.isBlank()) throw CancellationException()
-        val handle = ZeticMLangeLLMModel.downloadInBackground(
-            context = applicationContext,
-            personalKey = personalKey,
-            name = MelangeHyMt2Translator.MODEL_NAME,
-            version = null,
-            modelMode = LLMModelMode.RUN_AUTO,
-        )
-        currentCoroutineContext().ensureActive()
-        preferences.backgroundDownloadHandleId = handle.id
-        val status = ZeticMLangeLLMModel.getBackgroundDownloadStatus(applicationContext, handle)
-        currentCoroutineContext().ensureActive()
-        status.toUiState()
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: Throwable) {
-        ModelDownloadUiState(
-            state = BackgroundDownloadState.FAILED,
-            errorMessage = error.message,
-            isStatusLookupFailure = true,
-        )
+    private suspend fun scheduleLocked(): ModelDownloadUiState {
+        var createdHandle: BackgroundDownloadHandle? = null
+        return try {
+            currentCoroutineContext().ensureActive()
+            if (!hasConsent || personalKey.isBlank()) throw CancellationException()
+            createdHandle = sdk.download(applicationContext, personalKey)
+            // Persist ownership before observing cancellation. Once the SDK returns a handle, this
+            // coordinator must either retain it for restoration or stop it before letting go.
+            preferences.backgroundDownloadHandleId = createdHandle.id
+            currentCoroutineContext().ensureActive()
+            val status = sdk.status(applicationContext, createdHandle)
+            currentCoroutineContext().ensureActive()
+            status.toUiState()
+        } catch (error: CancellationException) {
+            createdHandle?.let { stopCreatedHandle(it) }
+            throw error
+        } catch (error: Throwable) {
+            ModelDownloadUiState(
+                state = BackgroundDownloadState.FAILED,
+                errorMessage = error.message,
+                isStatusLookupFailure = true,
+            )
+        }
+    }
+
+    private suspend fun stopCreatedHandle(handle: BackgroundDownloadHandle) = withContext(NonCancellable) {
+        val stopped = runCatching { sdk.stop(applicationContext, handle) }.isSuccess
+        if (stopped && preferences.backgroundDownloadHandleId == handle.id) {
+            preferences.backgroundDownloadHandleId = null
+        }
     }
 }
 

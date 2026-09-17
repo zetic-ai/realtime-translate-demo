@@ -18,21 +18,27 @@
     <string name="status_translating">Traduciendo para %1$s</string>
     <string name="status_error">Se produjo un error</string>
     <string name="status_accessibility">Estado de la sesión: %1$s</string>
-    <string name="speech_catalog_loading">Comprobando los idiomas instalados</string>
+    <string name="speech_catalog_loading">Comprobando los idiomas disponibles en el dispositivo</string>
 
     <!-- Header and language bar -->
-    <string name="zetic_opens_settings">ZETIC, abre los ajustes</string>
     <string name="speech_language_automatic">Automático (reconocimiento del dispositivo)</string>
     <string name="language_chip_accessibility">Idiomas del hablante %1$s: lee %2$s, habla %3$s</string>
     <string name="menu_reading_language">Idioma de lectura</string>
     <string name="menu_spoken_language">Idioma hablado</string>
+    <string name="speech_model_status_download_required">Descargar paquete de voz</string>
+    <string name="speech_model_status_download_pending">Descargando paquete de voz</string>
+    <string name="speech_model_group_downloading">Descargando</string>
+    <string name="speech_model_group_available">Disponible para descargar</string>
+    <string name="speech_model_download_guidance">Los paquetes de voz se descargan solo cuando eliges uno.</string>
+    <string name="speech_model_download_failed">Android no pudo iniciar la descarga de este paquete de voz.</string>
+    <string name="speech_open_voice_input_settings">Abrir ajustes de entrada de voz</string>
 
     <!-- Session banner -->
     <string name="banner_permission_body">Zetic Relay necesita acceso al micrófono para reconocer la voz en este dispositivo.</string>
     <string name="banner_open_app_settings">Abrir Ajustes</string>
     <string name="banner_allow_microphone">Permitir el micrófono</string>
     <string name="banner_request_permission_accessibility">Solicitar permiso del micrófono</string>
-    <string name="banner_loading_model">Cargando el modelo de traducción %1$d%%</string>
+    <string name="banner_loading_model">Cargando el modelo de traducción</string>
     <string name="banner_controls_unlock">Los controles de los hablantes se activan cuando el modelo esté listo.</string>
     <string name="banner_retry_model_load">Volver a cargar el modelo</string>
     <string name="banner_model_download_in_progress">Descarga del modelo en curso %1$d%%</string>
@@ -49,7 +55,10 @@
     <string name="bubble_destination">Para %1$s - %2$s</string>
     <string name="bubble_translation_pending">Traducción pendiente</string>
     <string name="bubble_recognizing">Reconociendo la voz</string>
+    <string name="bubble_listening">Escuchando</string>
     <string name="bubble_copy_action">Copiar</string>
+    <string name="retry_translation">Reintentar la traducción</string>
+    <string name="jump_to_latest">Ir a lo más reciente</string>
     <string name="toast_copied">Copiado</string>
 
     <!-- Bottom bar -->
@@ -59,23 +68,30 @@
     <string name="hint_resolve_error">Resuelve el error de arriba para continuar.</string>
     <string name="hint_start_conversation">Toca Empezar conversación para cargar el modelo de traducción.</string>
     <string name="hint_other_speaker_active">El hablante %1$s no puede empezar mientras el %2$s está hablando.</string>
-    <string name="hint_push_to_talk">Mantén pulsado un botón para hablar, o tócalo una vez para empezar y otra para parar.</string>
+    <string name="hint_push_to_talk">Toca un botón para hablar y vuelve a tocarlo para parar.</string>
     <string name="ptt_start">Empezar el turno de %1$s</string>
     <string name="ptt_stop">Terminar el turno de %1$s</string>
     <string name="ptt_blocked_by_other">El hablante %1$s no puede empezar mientras el hablante %2$s está hablando</string>
     <string name="ptt_blocked_model_not_ready">El botón para hablar del hablante %1$s se activa cuando el modelo esté listo</string>
-    <string name="ptt_caption_idle">" - mantén pulsado"</string>
-    <string name="ptt_caption_recording">" grabando - suelta para parar"</string>
+    <string name="ptt_caption_idle">" - toca para hablar"</string>
+    <string name="ptt_caption_recording">" grabando - toca para parar"</string>
     <string name="session_start">Empezar conversación</string>
     <string name="session_end">Terminar sesión</string>
+    <string name="session_cancel">Cancelar</string>
+    <string name="typed_input_action">Escribir un mensaje</string>
+    <string name="typed_input_title">Escribir un mensaje</string>
+    <string name="typed_input_speaker">¿Quién habla?</string>
+    <string name="typed_input_guidance">El hablante %1$s escribe en %2$s. El hablante %3$s lee la traducción en %4$s.</string>
+    <string name="typed_input_message">Mensaje</string>
+    <string name="typed_input_placeholder">Lo que quiere decir el hablante %1$s en %2$s</string>
+    <string name="typed_input_cancel">Cancelar</string>
+    <string name="typed_input_send">Enviar</string>
+    <string name="audio_interrupted_notice">El audio se interrumpió. Toca el botón del hablante y vuelve a intentarlo.</string>
+    <string name="no_speech_notice">No se detectó voz. Vuelve a intentarlo.</string>
 
     <!-- Spoken translation -->
-    <string name="sound_on_label">Traducción hablada activada</string>
-    <string name="sound_off_label">Traducción hablada desactivada</string>
-    <string name="sound_on_hint">Desactiva la traducción hablada.</string>
-    <string name="sound_off_hint">Activa la traducción hablada.</string>
     <string name="replay_label">Reproducir la traducción</string>
-    <string name="replay_hint">Vuelve a decir esta traducción en voz alta.</string>
+    <string name="replay_hint">Lee esta traducción en voz alta.</string>
 
     <!-- Settings drawer -->
     <string name="settings_title">Ajustes</string>
@@ -111,7 +127,7 @@
     <string name="first_run_welcome_privacy">La voz y la traducción funcionan en este teléfono. No se envía nada a ningún servidor.</string>
     <string name="first_run_welcome_action">Empezar</string>
     <string name="first_run_priming_title">Micrófono y voz</string>
-    <string name="first_run_priming_microphone">Micrófono: para oír a quien mantiene pulsado un botón.</string>
+    <string name="first_run_priming_microphone">Micrófono: para oír a quien toca el botón de hablante.</string>
     <string name="first_run_priming_speech">Reconocimiento de voz: para convertir ese audio en texto.</string>
     <string name="first_run_priming_privacy">Ambos funcionan en este teléfono. Ni el audio ni el texto salen del dispositivo.</string>
     <string name="first_run_priming_next">Android te pedirá el micrófono a continuación.</string>
@@ -127,10 +143,11 @@
     <!-- Speech recognition failures -->
     <string name="speech_error_main_thread">El reconocimiento de voz local debe iniciarse en el hilo principal de Android.</string>
     <string name="speech_error_recognition_failed">Falló el reconocimiento de voz local (error %1$d).</string>
-    <string name="speech_error_android_version">Este dispositivo necesita Android 12 (API 31) o una versión posterior para el reconocimiento de voz local.</string>
+    <string name="speech_error_android_version">Este dispositivo necesita Android 13 (API 33) o una versión posterior para el reconocimiento de voz local.</string>
     <string name="speech_error_permission">Se necesita permiso del micrófono.</string>
     <string name="speech_error_no_recognizer">Este dispositivo no tiene reconocimiento de voz local. La app no recurre al reconocimiento en línea.</string>
     <string name="speech_catalog_no_recognizer">Este dispositivo no tiene reconocimiento de voz local.</string>
+    <string name="speech_catalog_android_version">La entrada de voz requiere Android 13 (API 33) o una versión posterior.</string>
     <string name="speech_catalog_unavailable">La lista de idiomas instalados no está disponible (error %1$d).</string>
 
     <!-- Translation failures -->

@@ -1,5 +1,6 @@
 package ai.zetic.realtimetranslate
 
+import android.media.AudioManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,123 +9,22 @@ import org.junit.Test
 import java.util.Locale
 
 /**
- * The spoken-translation decisions. Nothing here listens to a speaker: the announcement rule, the
- * voice match, and the audio-focus handoff are all exercised over fakes, and the `TextToSpeech`
- * shell around them is verified on a device.
+ * The replay-only speech decisions, voice match, and audio-focus handoff are exercised over fakes.
  */
 class SpeechOutputTest {
 
     // region What gets spoken
 
-    @Test fun `a translation is spoken once, at the moment its bubble reaches the translated state`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(listOf(pending("1")), isMuted = false)
-        assertEquals(emptyList<String>(), output.spoken)
-
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-        assertEquals(listOf("annyeong" to "ko"), output.spoken)
-
-        // The same transcript arriving again, as any recomposition delivers it, says nothing more.
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-        assertEquals(listOf("annyeong" to "ko"), output.spoken)
-    }
-
-    @Test fun `a transcript already on screen is never read aloud when the announcer is created`() {
-        val output = FakeSpeechOutput()
-        val existing = listOf(translated("1", "annyeong"), translated("2", "yeoboseyo"))
-        val announcer = SpokenTranslationAnnouncer(output).seed(existing)
-
-        announcer.onConversationsChanged(existing, isMuted = false)
-
-        assertEquals(emptyList<Pair<String, String>>(), output.spoken)
-    }
-
-    @Test fun `newest wins, so a translation that lands mid-sentence cuts the older one off`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(listOf(translated("1", "first")), isMuted = false)
-        announcer.onConversationsChanged(
-            listOf(translated("1", "first"), translated("2", "second")),
-            isMuted = false,
+    @Test fun `only a completed bubble produces a replay request`() {
+        assertEquals(
+            SpokenTranslation.Speak("annyeong", "ko"),
+            SpokenTranslation.decision(translated("1", "annyeong")),
         )
-
-        assertEquals(listOf("first" to "ko", "second" to "ko"), output.spoken)
-        // The output replaces rather than queues, which is what QUEUE_FLUSH means downstream.
-        assertEquals(2, output.speakCalls)
-    }
-
-    @Test fun `two translations arriving in one update speak only the newest`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(
-            listOf(translated("1", "first"), translated("2", "second")),
-            isMuted = false,
+        assertEquals(SpokenTranslation.Silent, SpokenTranslation.decision(pending("2")))
+        assertEquals(
+            SpokenTranslation.Silent,
+            SpokenTranslation.decision(translated("3", "annyeong").copy(translationError = UiText.raw("failed"))),
         )
-
-        assertEquals(listOf("second" to "ko"), output.spoken)
-    }
-
-    @Test fun `muting suppresses the announcement and never builds a backlog to unmute into`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = true)
-        assertEquals(emptyList<Pair<String, String>>(), output.spoken)
-
-        // Unmuting is not a cue to read what was missed: that turn is over.
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-        assertEquals(emptyList<Pair<String, String>>(), output.spoken)
-    }
-
-    @Test fun `a failed translation and an empty one say nothing`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(
-            listOf(
-                translated("1", "  ").copy(translationError = null),
-                translated("2", "annyeong").copy(translationError = UiText.raw("failed")),
-            ),
-            isMuted = false,
-        )
-
-        assertEquals(emptyList<Pair<String, String>>(), output.spoken)
-    }
-
-    @Test fun `a cleared transcript lets the same ids speak again when they are rebuilt`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-        announcer.onConversationsChanged(emptyList(), isMuted = false)
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-
-        assertEquals(listOf("annyeong" to "ko", "annyeong" to "ko"), output.spoken)
-    }
-
-    @Test fun `beginning a turn stops speech, because nothing is spoken over an open microphone`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-
-        announcer.onConversationsChanged(listOf(translated("1", "annyeong")), isMuted = false)
-        announcer.stop()
-
-        assertEquals(1, output.stops)
-    }
-
-    @Test fun `replay speaks the same bubble again under the same rules`() {
-        val output = FakeSpeechOutput()
-        val announcer = SpokenTranslationAnnouncer(output)
-        val bubble = translated("1", "annyeong")
-
-        announcer.replay(bubble, isMuted = false)
-        announcer.replay(bubble, isMuted = true)
-
-        assertEquals(listOf("annyeong" to "ko"), output.spoken)
     }
 
     @Test fun `the recognizer holding the microphone is exactly listening and finalizing`() {
@@ -149,11 +49,10 @@ class SpeechOutputTest {
         assertTrue(ReplayControl.isPresent(translated("1", "annyeong")))
     }
 
-    @Test fun `the replay control is present but disabled while muted or while the microphone is open`() {
+    @Test fun `the replay control is present but disabled while the microphone is open`() {
         val bubble = translated("1", "annyeong")
-        assertTrue(ReplayControl.isEnabled(bubble, isMuted = false, isRecognizerLive = false))
-        assertFalse(ReplayControl.isEnabled(bubble, isMuted = true, isRecognizerLive = false))
-        assertFalse(ReplayControl.isEnabled(bubble, isMuted = false, isRecognizerLive = true))
+        assertTrue(ReplayControl.isEnabled(bubble, isRecognizerLive = false))
+        assertFalse(ReplayControl.isEnabled(bubble, isRecognizerLive = true))
     }
 
     // endregion
@@ -235,6 +134,44 @@ class SpeechOutputTest {
         assertEquals(2, focus.requests)
     }
 
+    @Test fun `playback focus loss stops the owner and hands focus back`() {
+        val focus = FakeAudioFocus()
+        val coordinator = SpeechAudioCoordinator(focus)
+        var stops = 0
+
+        assertTrue(coordinator.claim {
+            stops += 1
+            coordinator.release()
+        })
+        focus.interrupt()
+
+        assertEquals(1, stops)
+        assertEquals(1, focus.abandons)
+        assertFalse(coordinator.isHoldingFocus)
+        assertTrue(SpeechPlaybackFocusContract.interrupts(AudioManager.AUDIOFOCUS_LOSS))
+        assertTrue(SpeechPlaybackFocusContract.interrupts(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT))
+        assertTrue(SpeechPlaybackFocusContract.interrupts(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK))
+        assertFalse(SpeechPlaybackFocusContract.interrupts(AudioManager.AUDIOFOCUS_GAIN))
+    }
+
+    @Test fun `playback route loss stops the owner and hands focus back`() {
+        val focus = FakeAudioFocus()
+        val coordinator = SpeechAudioCoordinator(focus)
+        var stops = 0
+
+        assertTrue(coordinator.claim {
+            stops += 1
+            coordinator.release()
+        })
+        focus.routeLoss(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+
+        assertEquals(1, stops)
+        assertEquals(1, focus.abandons)
+        assertFalse(coordinator.isHoldingFocus)
+        assertTrue(SpeechPlaybackFocusContract.interruptsRouteChange(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        assertFalse(SpeechPlaybackFocusContract.interruptsRouteChange(null))
+    }
+
     // endregion
 
     private fun locales(vararg tags: String) = tags.map(Locale::forLanguageTag)
@@ -250,29 +187,26 @@ class SpeechOutputTest {
 
     private fun translated(id: String, translation: String) = pending(id).copy(translation = translation)
 
-    private class FakeSpeechOutput : SpeechOutput {
-        val spoken = mutableListOf<Pair<String, String>>()
-        var speakCalls = 0
-        var stops = 0
-
-        override fun speak(text: String, languageCode: String) {
-            speakCalls += 1
-            spoken += text to languageCode
-        }
-
-        override fun stop() { stops += 1 }
-        override fun shutdown() = Unit
-    }
-
     private class FakeAudioFocus(var granted: Boolean = true) : SpeechAudioFocus {
         var requests = 0
         var abandons = 0
+        private var interruption: (() -> Unit)? = null
 
-        override fun request(): Boolean {
+        override fun request(onInterrupted: () -> Unit): Boolean {
             requests += 1
+            interruption = onInterrupted.takeIf { granted }
             return granted
         }
 
-        override fun abandon() { abandons += 1 }
+        override fun abandon() {
+            interruption = null
+            abandons += 1
+        }
+
+        fun interrupt() = checkNotNull(interruption).invoke()
+
+        fun routeLoss(action: String?) {
+            if (SpeechPlaybackFocusContract.interruptsRouteChange(action)) checkNotNull(interruption).invoke()
+        }
     }
 }

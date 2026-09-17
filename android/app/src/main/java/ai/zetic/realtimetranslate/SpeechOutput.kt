@@ -11,9 +11,8 @@ import java.util.Locale
 /**
  * Spoken translation output, and the decisions behind it.
  *
- * A translation that arrives is read aloud in the language it was translated into, so the person it
- * is for can listen instead of leaning over the phone. The voice is the platform's own synthesizer;
- * no model is downloaded and nothing is sent anywhere.
+ * Completed translations are spoken only when the user taps replay. The voice is the platform's
+ * own synthesizer; no model is downloaded and nothing is sent anywhere.
  *
  * Nothing here can be asserted by listening to a speaker, so the split the session-comfort work
  * uses applies again: every decision is a pure function or a small state machine over an injected
@@ -45,16 +44,14 @@ val ConversationItem.speakableTranslation: String?
     get() = translation?.takeIf { translationError == null && it.isNotBlank() }
 
 /**
- * Whether a bubble speaks, and in which language. The one rule both the automatic announcement and
- * the replay control go through, so muting cannot suppress only one of them.
+ * Whether a bubble can be replayed, and in which language. Nothing is spoken automatically.
  */
 sealed interface SpokenTranslation {
     data class Speak(val text: String, val languageCode: String) : SpokenTranslation
     data object Silent : SpokenTranslation
 
     companion object {
-        fun decision(item: ConversationItem, isMuted: Boolean): SpokenTranslation {
-            if (isMuted) return Silent
+        fun decision(item: ConversationItem): SpokenTranslation {
             val text = item.speakableTranslation ?: return Silent
             return Speak(text, item.targetLanguage.code)
         }
@@ -63,14 +60,14 @@ sealed interface SpokenTranslation {
 
 /**
  * The replay control on a translated bubble. Absent when there is nothing to play, and present but
- * disabled while sound is off or the recognizer holds the microphone: a control that answers a tap
+ * disabled while the recognizer holds the microphone: a control that answers a tap
  * with silence reads as broken rather than busy.
  */
 object ReplayControl {
     fun isPresent(item: ConversationItem): Boolean = item.speakableTranslation != null
 
-    fun isEnabled(item: ConversationItem, isMuted: Boolean, isRecognizerLive: Boolean): Boolean =
-        isPresent(item) && !isMuted && !isRecognizerLive
+    fun isEnabled(item: ConversationItem, isRecognizerLive: Boolean): Boolean =
+        isPresent(item) && !isRecognizerLive
 }
 
 // endregion
@@ -133,7 +130,7 @@ object SpeechVoiceMatching {
 /** The audio focus the speech output needs. `AudioManager` in the app, a spy in tests. */
 interface SpeechAudioFocus {
     /** @return whether focus was granted. A refusal means nothing is spoken. */
-    fun request(): Boolean
+    fun request(onInterrupted: () -> Unit): Boolean
     fun abandon()
 }
 
@@ -155,9 +152,9 @@ class SpeechAudioCoordinator(private val focus: SpeechAudioFocus) {
      * unclaimed, so nothing is spoken over whatever holds the route, and the next translation
      * tries again from scratch.
      */
-    fun claim(): Boolean {
+    fun claim(onInterrupted: () -> Unit = {}): Boolean {
         if (isHoldingFocus) return true
-        isHoldingFocus = focus.request()
+        isHoldingFocus = focus.request(onInterrupted)
         return isHoldingFocus
     }
 
@@ -174,13 +171,19 @@ class SpeechAudioCoordinator(private val focus: SpeechAudioFocus) {
  * else the phone is playing should dip under it and come straight back.
  */
 class AndroidSpeechAudioFocus(context: Context) : SpeechAudioFocus {
-    private val manager = context.applicationContext.getSystemService(AudioManager::class.java)
+    private val applicationContext = context.applicationContext
+    private val manager = applicationContext.getSystemService(AudioManager::class.java)
+    private val routeLoss = AudioRouteLossMonitor(applicationContext)
     private var request: AudioFocusRequest? = null
+    private var interruption: (() -> Unit)? = null
 
-    private val listener = AudioManager.OnAudioFocusChangeListener { }
+    private val listener = AudioManager.OnAudioFocusChangeListener { change ->
+        if (SpeechPlaybackFocusContract.interrupts(change)) interruption?.invoke()
+    }
 
-    override fun request(): Boolean {
+    override fun request(onInterrupted: () -> Unit): Boolean {
         val audioManager = manager ?: return false
+        interruption = onInterrupted
         val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -188,19 +191,36 @@ class AndroidSpeechAudioFocus(context: Context) : SpeechAudioFocus {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
-            // The listener is required for a focus request and deliberately does nothing: losing
-            // focus mid-sentence is not worth reacting to, and the engine stops on its own.
             .setOnAudioFocusChangeListener(listener)
             .build()
         request = focusRequest
-        return audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        val granted = audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (!granted) {
+            request = null
+            interruption = null
+        } else {
+            routeLoss.start { interruption?.invoke() }
+        }
+        return granted
     }
 
     override fun abandon() {
+        interruption = null
+        routeLoss.stop()
         val audioManager = manager ?: return
         request?.let { audioManager.abandonAudioFocusRequest(it) }
         request = null
     }
+}
+
+internal object SpeechPlaybackFocusContract {
+    fun interrupts(change: Int): Boolean = change in setOf(
+        AudioManager.AUDIOFOCUS_LOSS,
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK,
+    )
+
+    fun interruptsRouteChange(action: String?): Boolean = AudioRouteLossContract.interrupts(action)
 }
 
 // endregion
@@ -220,55 +240,6 @@ interface SpeechOutput {
     fun stop()
 
     fun shutdown()
-}
-
-/**
- * The announcement rule over an injected [SpeechOutput]: a translation is spoken exactly once, at
- * the moment its bubble reaches the translated state, and a newer translation cuts off an older one
- * rather than queueing behind it. Two people talking must never build a backlog of sentences the
- * phone still owes them.
- *
- * The set of already-announced ids is the whole state. It is seeded from the transcript the
- * announcer is created over, so a recomposition or a rotation never re-reads a conversation that
- * has already been spoken.
- */
-class SpokenTranslationAnnouncer(private val output: SpeechOutput) {
-    private val announced = mutableSetOf<String>()
-
-    /** Marks everything already translated as heard, without speaking any of it. */
-    fun seed(items: List<ConversationItem>) = apply {
-        items.filter { it.speakableTranslation != null }.forEach { announced += it.id }
-    }
-
-    /**
-     * Speaks whatever reached the translated state since the last call. More than one at once is
-     * only possible when the transcript was rebuilt, and newest-wins makes it the last one anyway.
-     */
-    fun onConversationsChanged(items: List<ConversationItem>, isMuted: Boolean) {
-        val arrived = items.filter { it.speakableTranslation != null && it.id !in announced }
-        // Marked heard whether or not sound is on, so unmuting never blurts out a backlog.
-        arrived.forEach { announced += it.id }
-        arrived.lastOrNull()?.let { speak(it, isMuted) }
-        // A cleared or restarted transcript takes its ids with it.
-        announced.retainAll(items.mapTo(mutableSetOf()) { it.id })
-    }
-
-    /** The replay control. Same rule as the automatic announcement, including newest-wins. */
-    fun replay(item: ConversationItem, isMuted: Boolean) = speak(item, isMuted)
-
-    /**
-     * Nothing is ever spoken while the microphone is open, so a turn beginning stops speech
-     * synchronously before the recognizer starts. Ending a session and clearing the transcript stop
-     * it too: that sentence belongs to a conversation that is going away.
-     */
-    fun stop() = output.stop()
-
-    private fun speak(item: ConversationItem, isMuted: Boolean) {
-        when (val decision = SpokenTranslation.decision(item, isMuted)) {
-            is SpokenTranslation.Speak -> output.speak(decision.text, decision.languageCode)
-            SpokenTranslation.Silent -> Unit
-        }
-    }
 }
 
 /**
@@ -320,7 +291,7 @@ class AndroidSpeechOutput(
             return
         }
         // Newest wins. Focus is deliberately not released here: the cut should not be audible.
-        if (!audio.claim()) return
+        if (!audio.claim(::stop)) return
         utteranceCount += 1
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "translation-$utteranceCount")
     }

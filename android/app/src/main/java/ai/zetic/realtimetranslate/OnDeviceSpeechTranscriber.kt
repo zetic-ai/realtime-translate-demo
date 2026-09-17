@@ -10,7 +10,9 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
+import android.speech.ModelDownloadListener
 import java.util.Locale
+import java.util.concurrent.Executor
 
 interface SpeechTranscriber {
     fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult
@@ -124,29 +126,64 @@ object OnDeviceRecognitionIntentFactory {
     }
 }
 
+object SpeechModelDownloadRequest {
+    data class IntentSpec(val languageTag: String, val preferOffline: Boolean)
+
+    fun shouldTrigger(language: SpeechLanguage.Installed): Boolean =
+        language.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadRequired
+
+    fun intentSpec(languageTag: String): IntentSpec = IntentSpec(
+        languageTag = languageTag,
+        preferOffline = true,
+    )
+
+    fun intent(languageTag: String, sdkInt: Int): Intent = OnDeviceRecognitionIntentFactory.create(
+        SpeechLanguage.Installed(languageTag, languageTag),
+        sdkInt,
+    )
+}
+
 interface SpeechLanguageCatalog {
     fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit)
+    fun requestDownload(
+        context: Context,
+        language: SpeechLanguage.Installed,
+        onResult: (SpeechModelDownloadResult) -> Unit,
+    ): Boolean
 }
 
 data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: UiText? = null)
 
-object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
+enum class SpeechModelDownloadResult { Completed, Scheduled, Failed }
+
+class AndroidSpeechLanguageCatalog(
+    private val platform: OnDeviceSpeechRecognizerPlatform = AndroidOnDeviceSpeechRecognizerPlatform,
+) : SpeechLanguageCatalog {
     override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic)))
+            onResult(
+                SpeechLanguageCatalogResult(
+                    listOf(SpeechLanguage.Automatic),
+                    UiText.res(R.string.speech_catalog_android_version),
+                ),
+            )
             return
         }
-        if (!AndroidOnDeviceSpeechRecognizerPlatform.isOnDeviceRecognitionAvailable(context)) {
+        if (!platform.isOnDeviceRecognitionAvailable(context)) {
             onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic), UiText.res(R.string.speech_catalog_no_recognizer)))
             return
         }
-        val recognizer = AndroidOnDeviceSpeechRecognizerPlatform.createOnDeviceSpeechRecognizer(context)
+        val recognizer = platform.createOnDeviceSpeechRecognizer(context)
         recognizer.checkRecognitionSupport(
             OnDeviceRecognitionIntentFactory.create(SpeechLanguage.Automatic, Build.VERSION.SDK_INT),
             context.mainExecutor,
             object : RecognitionSupportCallback {
                 override fun onSupportResult(support: RecognitionSupport) {
-                    val languages = SpeechLanguageCatalogMapping.installed(support.installedOnDeviceLanguages)
+                    val languages = SpeechLanguageCatalogMapping.onDevice(
+                        installedTags = support.installedOnDeviceLanguages,
+                        supportedTags = support.supportedOnDeviceLanguages,
+                        pendingTags = support.pendingOnDeviceLanguages,
+                    )
                     recognizer.destroy()
                     onResult(SpeechLanguageCatalogResult(listOf(SpeechLanguage.Automatic) + languages))
                 }
@@ -158,6 +195,29 @@ object AndroidSpeechLanguageCatalog : SpeechLanguageCatalog {
         )
     }
 
+    override fun requestDownload(
+        context: Context,
+        language: SpeechLanguage.Installed,
+        onResult: (SpeechModelDownloadResult) -> Unit,
+    ): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            !SpeechModelDownloadRequest.shouldTrigger(language) ||
+            !platform.isOnDeviceRecognitionAvailable(context)
+        ) {
+            return false
+        }
+        val recognizer = runCatching { platform.createOnDeviceSpeechRecognizer(context) }.getOrNull() ?: return false
+        val started = platform.triggerModelDownload(
+            recognizer = recognizer,
+            intent = SpeechModelDownloadRequest.intent(language.languageTag, Build.VERSION.SDK_INT),
+            executor = context.mainExecutor,
+        ) { success ->
+            recognizer.destroy()
+            onResult(success)
+        }
+        if (!started) recognizer.destroy()
+        return started
+    }
 }
 
 object SpeechLanguageCatalogMapping {
@@ -169,10 +229,34 @@ object SpeechLanguageCatalogMapping {
     fun installed(tags: List<String>, displayLocale: Locale = Locale.getDefault()): List<SpeechLanguage.Installed> =
         tags.map { installedLanguage(it, displayLocale) }.distinctBy { it.languageTag }.sortedBy { it.name }
 
+    /**
+     * Android 13+ reports installed, supported, and pending on-device languages separately. Merge
+     * them without a fixed language whitelist, preserving the exact platform tag from the
+     * highest-priority state so a later download request sends that same tag back to Android.
+     */
+    fun onDevice(
+        installedTags: List<String>,
+        supportedTags: List<String>,
+        pendingTags: List<String>,
+        displayLocale: Locale = Locale.getDefault(),
+    ): List<SpeechLanguage.Installed> {
+        val byTag = linkedMapOf<String, SpeechLanguage.Installed>()
+        fun merge(tags: List<String>, status: SpeechLanguage.OnDeviceStatus) {
+            tags.filter(String::isNotBlank).forEach { tag ->
+                byTag[tag.lowercase(Locale.ROOT)] = installedLanguage(tag, displayLocale).copy(onDeviceStatus = status)
+            }
+        }
+        merge(supportedTags, SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        merge(pendingTags, SpeechLanguage.OnDeviceStatus.DownloadPending)
+        merge(installedTags, SpeechLanguage.OnDeviceStatus.Ready)
+        return byTag.values.sortedBy { it.name }
+    }
+
     private fun installedLanguage(tag: String, displayLocale: Locale): SpeechLanguage.Installed {
         val locale = Locale.forLanguageTag(tag)
         return SpeechLanguage.Installed(tag, locale.getDisplayName(displayLocale).ifBlank { tag })
     }
+
 }
 
 /**
@@ -185,6 +269,7 @@ object SpokenLanguageMatching {
     fun match(reading: TranslationLanguage, available: List<SpeechLanguage>): SpeechLanguage.Installed? {
         val primary = primarySubtag(reading.code) ?: return null
         val matches = available.filterIsInstance<SpeechLanguage.Installed>()
+            .filter { it.onDeviceStatus.isSelectable }
             .filter { primarySubtag(it.languageTag) == primary }
         if (matches.size <= 1) return matches.firstOrNull()
         val implied = variantSubtags(reading.code) + likelyVariants.getOrElse(reading.code) { emptySet() }
@@ -225,20 +310,72 @@ object SpokenLanguageMatching {
 interface OnDeviceSpeechRecognizerPlatform {
     fun isOnDeviceRecognitionAvailable(context: Context): Boolean
     fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer
+    fun triggerModelDownload(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (SpeechModelDownloadResult) -> Unit,
+    ): Boolean
 }
 
 object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatform {
     override fun isOnDeviceRecognitionAvailable(context: Context): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     @android.annotation.TargetApi(Build.VERSION_CODES.S)
     override fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer =
         SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.TIRAMISU)
+    override fun triggerModelDownload(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (SpeechModelDownloadResult) -> Unit,
+    ): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || Looper.myLooper() != Looper.getMainLooper()) return false
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                triggerModelDownloadWithListener(recognizer, intent, executor, onResult)
+            } else {
+                recognizer.triggerModelDownload(intent)
+                // Android 13 only confirms that the request was accepted; it has no completion
+                // listener, so RecognitionSupport must be rechecked while the UI remains visible.
+                onResult(SpeechModelDownloadResult.Scheduled)
+            }
+        }.isSuccess
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun triggerModelDownloadWithListener(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        onResult: (SpeechModelDownloadResult) -> Unit,
+    ) {
+        var finished = false
+        fun finish(result: SpeechModelDownloadResult) {
+            if (!finished) {
+                finished = true
+                onResult(result)
+            }
+        }
+        recognizer.triggerModelDownload(
+            intent,
+            executor,
+            object : ModelDownloadListener {
+                override fun onProgress(completedPercent: Int) = Unit
+                override fun onSuccess() = finish(SpeechModelDownloadResult.Completed)
+                override fun onScheduled() = finish(SpeechModelDownloadResult.Scheduled)
+                override fun onError(error: Int) = finish(SpeechModelDownloadResult.Failed)
+            },
+        )
+    }
 }
 
 object OnDeviceRecognitionEligibility {
     fun failureFor(sdkInt: Int, hasRecordAudioPermission: Boolean, isOnDeviceRecognizerAvailable: Boolean): UiText? = when {
-        sdkInt < Build.VERSION_CODES.S -> UiText.res(R.string.speech_error_android_version)
+        sdkInt < Build.VERSION_CODES.TIRAMISU -> UiText.res(R.string.speech_error_android_version)
         !hasRecordAudioPermission -> UiText.res(R.string.speech_error_permission)
         !isOnDeviceRecognizerAvailable -> UiText.res(R.string.speech_error_no_recognizer)
         else -> null

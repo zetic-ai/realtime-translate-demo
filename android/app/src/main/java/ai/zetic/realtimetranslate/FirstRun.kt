@@ -23,7 +23,13 @@ import android.net.ConnectivityManager
  * The two first-run keys are spelled exactly as the iOS `@AppStorage` keys, so the two platforms
  * can be reasoned about as one contract.
  */
-class FirstRunPreferences(context: Context) {
+interface ModelDownloadPreferenceStore {
+    var hasEverLoadedModel: Boolean
+    var modelDownloadConsent: Boolean
+    var backgroundDownloadHandleId: String?
+}
+
+class FirstRunPreferences(context: Context) : ModelDownloadPreferenceStore {
     private val preferences =
         context.applicationContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
 
@@ -42,7 +48,7 @@ class FirstRunPreferences(context: Context) {
      * is a user who clears app data or storage without uninstalling: they are asked to consent to a
      * download that is genuinely about to happen, which is the safe direction to be wrong in.
      */
-    var hasEverLoadedModel: Boolean
+    override var hasEverLoadedModel: Boolean
         get() = preferences.getBoolean(MODEL_LOADED_KEY, false)
         set(value) = preferences.edit().putBoolean(MODEL_LOADED_KEY, value).apply()
 
@@ -50,27 +56,15 @@ class FirstRunPreferences(context: Context) {
      * A successful load in a prior version is evidence that the person already approved this
      * download. New installs must make the explicit decision before scheduling anything.
      */
-    var modelDownloadConsent: Boolean
+    override var modelDownloadConsent: Boolean
         get() = preferences.getBoolean(MODEL_DOWNLOAD_CONSENT_KEY, hasEverLoadedModel)
         set(value) = preferences.edit().putBoolean(MODEL_DOWNLOAD_CONSENT_KEY, value).apply()
 
-    var backgroundDownloadHandleId: String?
+    override var backgroundDownloadHandleId: String?
         get() = preferences.getString(BACKGROUND_DOWNLOAD_HANDLE_KEY, null)
         set(value) = preferences.edit().apply {
             if (value == null) remove(BACKGROUND_DOWNLOAD_HANDLE_KEY) else putString(BACKGROUND_DOWNLOAD_HANDLE_KEY, value)
         }.apply()
-
-    /**
-     * Whether spoken translation is off. Default is sound on, and the key is spelled exactly as the
-     * iOS `@AppStorage` key. Read on the first frame rather than after it, so a launch that starts
-     * muted never speaks before the screen appears.
-     *
-     * The app language is deliberately not here: that one is written to the platform's own per-app
-     * locale, which the phone's Settings app shows and edits too.
-     */
-    var speechMuted: Boolean
-        get() = preferences.getBoolean(SPEECH_MUTED_KEY, false)
-        set(value) = preferences.edit().putBoolean(SPEECH_MUTED_KEY, value).apply()
 
     companion object {
         const val FILE_NAME = "turn-translate"
@@ -79,7 +73,6 @@ class FirstRunPreferences(context: Context) {
         const val MODEL_LOADED_KEY = "model.hasEverLoaded"
         const val MODEL_DOWNLOAD_CONSENT_KEY = "model.downloadConsent"
         const val BACKGROUND_DOWNLOAD_HANDLE_KEY = "model.backgroundDownloadHandle"
-        const val SPEECH_MUTED_KEY = "speech.muted"
     }
 }
 
@@ -154,7 +147,7 @@ object ModelDownloadConsent {
  * surfaces as a resource, so the French and Spanish passes cover them without touching this file.
  */
 object FirstRunCopy {
-    const val PRODUCT_NAME = "Zetic Relay"
+    const val PRODUCT_NAME = "Turn Translate"
 }
 
 /** The consent card's one composed sentence: a translated frame around a hedged, formatted size. */

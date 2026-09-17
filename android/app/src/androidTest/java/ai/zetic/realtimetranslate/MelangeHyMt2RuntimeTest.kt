@@ -29,7 +29,7 @@ class MelangeHyMt2RuntimeTest {
                 sourceText = "Good morning.",
                 targetLanguage = HyMt2Languages.all.first { it.code == "fr" },
             )
-            assertTrue("Model run failed.", model.run(prompt).status == 0)
+            model.run(prompt)
             var completed = false
             val translation = buildString {
                 for (attempt in 0 until 256) {
