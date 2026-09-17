@@ -265,6 +265,22 @@ class SessionViewModelTest {
         assertEquals(1f, viewModel.state.value.modelLoadProgress)
     }
 
+    @Test fun `model loading stays indeterminate until the SDK reports download progress`() = runTest {
+        val translator = NonCooperativeLoadTranslator()
+        val viewModel = SessionViewModel(translator = translator, initialState = SessionUiState(SessionPhase.Ready))
+
+        viewModel.dispatch(SessionAction.StartConversation(TestContext()))
+        runCurrent()
+
+        assertEquals(SessionPhase.LoadingModel, viewModel.state.value.phase)
+        assertEquals(null, viewModel.state.value.modelLoadProgress)
+
+        translator.progress(0.42f)
+
+        assertEquals(0.42f, viewModel.state.value.modelLoadProgress)
+        viewModel.dispatch(SessionAction.CancelModelPreparation)
+    }
+
     @Test fun `model load failure offers retry state without enabling conversation`() = runTest {
         val translator = FakeTranslator(loadError = IllegalStateException("offline"))
         val viewModel = SessionViewModel(translator = translator, initialState = SessionUiState(SessionPhase.Ready))
@@ -274,6 +290,7 @@ class SessionViewModelTest {
 
         assertEquals(SessionPhase.ModelLoadFailed, viewModel.state.value.phase)
         assertFalse(viewModel.state.value.conversationStarted)
+        assertEquals(null, viewModel.state.value.modelLoadProgress)
         assertEquals(UiText.raw("offline"), viewModel.state.value.errorMessage)
     }
 
@@ -589,7 +606,7 @@ class SessionViewModelTest {
 
         assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
         assertFalse(viewModel.state.value.conversationStarted)
-        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+        assertEquals(null, viewModel.state.value.modelLoadProgress)
     }
 
     @Test fun `cancelled noncooperative model load cannot publish progress or success`() = runTest {
@@ -605,13 +622,13 @@ class SessionViewModelTest {
 
         viewModel.dispatch(SessionAction.CancelModelPreparation)
         translator.progress(0.9f)
-        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+        assertEquals(null, viewModel.state.value.modelLoadProgress)
         translator.complete()
         runCurrent()
 
         assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
         assertFalse(viewModel.state.value.conversationStarted)
-        assertEquals(0f, viewModel.state.value.modelLoadProgress)
+        assertEquals(null, viewModel.state.value.modelLoadProgress)
     }
 
     @Test fun `a newer partial keeps the last provisional translation until its replacement lands`() = runTest {

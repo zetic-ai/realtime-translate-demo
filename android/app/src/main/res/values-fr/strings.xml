@@ -39,7 +39,7 @@
     <string name="banner_open_app_settings">Ouvrir les Paramètres</string>
     <string name="banner_allow_microphone">Autoriser le micro</string>
     <string name="banner_request_permission_accessibility">Demander l’autorisation du micro</string>
-    <string name="banner_loading_model">Chargement du modèle de traduction %1$d %%</string>
+    <string name="banner_loading_model">Chargement du modèle de traduction</string>
     <string name="banner_controls_unlock">Les commandes s’activent quand le modèle est prêt.</string>
     <string name="banner_retry_model_load">Recharger le modèle</string>
     <string name="banner_model_download_in_progress">Téléchargement du modèle en cours %1$d %%</string>

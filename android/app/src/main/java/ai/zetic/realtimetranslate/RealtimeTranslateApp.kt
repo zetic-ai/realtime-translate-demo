@@ -481,17 +481,27 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
             }
         }
         SessionPhase.LoadingModel -> Banner {
-            Text(
-                stringResource(R.string.banner_loading_model, (state.modelLoadProgress * 100).toInt()),
-                color = TextPrimary,
-                fontSize = 14.sp,
-            )
-            LinearProgressIndicator(
-                progress = { state.modelLoadProgress },
-                modifier = Modifier.fillMaxWidth(),
-                color = Accent,
-                trackColor = DividerLine,
-            )
+            val progress = state.modelLoadProgress
+            if (progress == null) {
+                Text(stringResource(R.string.banner_loading_model), color = TextPrimary, fontSize = 14.sp)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Accent,
+                    trackColor = DividerLine,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.banner_model_download_in_progress, (progress * 100).toInt()),
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                )
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Accent,
+                    trackColor = DividerLine,
+                )
+            }
             Text(stringResource(R.string.banner_controls_unlock), color = TextSecondary, fontSize = 12.sp)
             val cancel = stringResource(R.string.session_cancel)
             BannerAction(cancel, cancel) { onAction(UiAction.CancelModelPreparation) }

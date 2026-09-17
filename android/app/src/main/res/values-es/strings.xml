@@ -38,7 +38,7 @@
     <string name="banner_open_app_settings">Abrir Ajustes</string>
     <string name="banner_allow_microphone">Permitir el micrófono</string>
     <string name="banner_request_permission_accessibility">Solicitar permiso del micrófono</string>
-    <string name="banner_loading_model">Cargando el modelo de traducción %1$d%%</string>
+    <string name="banner_loading_model">Cargando el modelo de traducción</string>
     <string name="banner_controls_unlock">Los controles de los hablantes se activan cuando el modelo esté listo.</string>
     <string name="banner_retry_model_load">Volver a cargar el modelo</string>
     <string name="banner_model_download_in_progress">Descarga del modelo en curso %1$d%%</string>

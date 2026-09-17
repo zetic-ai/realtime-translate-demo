@@ -74,7 +74,8 @@ class LocalizationCatalogTest {
             assertTrue("fr/$key has an ASCII apostrophe", !value.contains('\''))
         }
         assertTrue(french.getValue("first_run_priming_microphone").contains("Micro :"))
-        assertTrue(french.getValue("banner_loading_model").contains("%1\$d %%"))
+        assertTrue(french.getValue("banner_loading_model").contains("Chargement du modèle de traduction"))
+        assertTrue(french.getValue("banner_model_download_in_progress").contains("%1\$d %%"))
         assertTrue(french.getValue("settings_app_language_title").contains('’'))
     }
 

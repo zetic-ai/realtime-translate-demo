@@ -359,10 +359,19 @@ class RealtimeTranslateAppTest {
 
     @Test fun modelLoadingRendersInlineAndLocksLanguageChips() {
         setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f))
-        composeRule.onNodeWithText("Loading translation model 50%").assertIsDisplayed()
+        composeRule.onNodeWithText("Model download in progress 50%").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun cachedModelLoadShowsIndeterminateLoadingWithoutDownloadPercentage() {
+        setApp(SessionUiState(SessionPhase.LoadingModel))
+
+        composeRule.onNodeWithText("Loading translation model").assertIsDisplayed()
+        composeRule.onNodeWithText("Loading translation model 0%").assertDoesNotExist()
+        composeRule.onNodeWithText("Model download in progress 0%").assertDoesNotExist()
+        composeRule.onNodeWithText("Downloading translation model 0%").assertDoesNotExist()
     }
 
     @Test fun unknownDownloadProgressDoesNotMisrepresentItAsZeroPercent() {

@@ -88,7 +88,8 @@ data class SessionUiState(
     val settings: Map<Speaker, SpeakerSettings> = defaultSpeakerSettings(),
     val conversations: List<ConversationItem> = emptyList(),
     val conversationStarted: Boolean = false,
-    val modelLoadProgress: Float = 0f,
+    /** Null until the SDK reports that it actually needs to download model data. */
+    val modelLoadProgress: Float? = null,
     val speechLanguages: List<SpeechLanguage> = listOf(SpeechLanguage.Automatic),
     val speechLanguageCatalogLoading: Boolean = false,
     val speechLanguageCatalogMessage: UiText? = null,

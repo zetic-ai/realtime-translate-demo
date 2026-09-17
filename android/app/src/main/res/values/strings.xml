@@ -41,7 +41,7 @@
     <string name="banner_open_app_settings">Open app settings</string>
     <string name="banner_allow_microphone">Allow microphone</string>
     <string name="banner_request_permission_accessibility">Request microphone permission</string>
-    <string name="banner_loading_model">Loading translation model %1$d%%</string>
+    <string name="banner_loading_model">Loading translation model</string>
     <string name="banner_controls_unlock">Speaker controls unlock when the model is ready.</string>
     <string name="banner_retry_model_load">Retry model load</string>
     <string name="banner_model_download_in_progress">Model download in progress %1$d%%</string>

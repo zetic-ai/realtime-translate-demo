@@ -350,7 +350,7 @@ class SessionViewModel(
         runForCurrentModelLoad(loadGeneration, downloadGeneration) {
             val current = mutableState.value
             if (current.phase in setOf(SessionPhase.Ready, SessionPhase.ModelLoadFailed)) {
-                mutableState.value = current.copy(phase = SessionPhase.LoadingModel, errorMessage = null, modelLoadProgress = 0f)
+                mutableState.value = current.copy(phase = SessionPhase.LoadingModel, errorMessage = null, modelLoadProgress = null)
                 modelLoadStarted = true
             }
         }
@@ -359,7 +359,10 @@ class SessionViewModel(
             runCatching {
                 translator.load(context, loadProgress@{ progress ->
                     runForCurrentModelLoad(loadGeneration, downloadGeneration) {
-                        mutableState.value = mutableState.value.copy(modelLoadProgress = progress.coerceIn(0f, 1f))
+                        val current = mutableState.value
+                        if (current.phase == SessionPhase.LoadingModel) {
+                            mutableState.value = current.copy(modelLoadProgress = progress.coerceIn(0f, 1f))
+                        }
                     }
                 })
             }.onSuccess {
@@ -369,7 +372,11 @@ class SessionViewModel(
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
                 runForCurrentModelLoad(loadGeneration, downloadGeneration) {
-                    mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.asUiText(R.string.error_model_load_failed))
+                    mutableState.value = mutableState.value.copy(
+                        phase = SessionPhase.ModelLoadFailed,
+                        modelLoadProgress = null,
+                        errorMessage = error.asUiText(R.string.error_model_load_failed),
+                    )
                 }
             }
         }
@@ -385,7 +392,7 @@ class SessionViewModel(
             phase = SessionPhase.Ready,
             conversationStarted = false,
             backgroundDownload = null,
-            modelLoadProgress = 0f,
+            modelLoadProgress = null,
             errorMessage = null,
         )
         if (downloader != null) viewModelScope.launch { runCatching { downloader.cancel() } }
@@ -416,7 +423,7 @@ class SessionViewModel(
                         mutableState.value = mutableState.value.copy(
                             phase = SessionPhase.Ready,
                             conversationStarted = false,
-                            modelLoadProgress = 0f,
+                            modelLoadProgress = null,
                             backgroundDownload = null,
                             modelRemovalMessage = UiText.res(R.string.model_removal_complete),
                             errorMessage = null,
@@ -694,7 +701,7 @@ class SessionViewModel(
         translationJob?.cancel()
         translationJob = null
         endLiveTranslation()
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, notice = null, modelLoadProgress = 0f)
+        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, notice = null, modelLoadProgress = null)
     }
     /**
      * Empties the transcript without ending the session: the model stays resident, both language
