@@ -208,6 +208,64 @@ class RealtimeTranslateAppTest {
         assertEquals(0, actions)
     }
 
+    @Test fun pendingSpeechPackRechecksStopWhenThePackBecomesReady() {
+        val pending = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        val state = mutableStateOf(
+            SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, pending)),
+        )
+        val actions = mutableListOf<UiAction>()
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            RefreshPendingSpeechPacks(state.value, actions::add)
+        }
+
+        composeRule.mainClock.advanceTimeBy(SPEECH_PACK_RECHECK_INTERVAL_MILLIS + 1)
+        composeRule.waitForIdle()
+        assertEquals(listOf(UiAction.RefreshSpeechLanguages), actions)
+
+        composeRule.runOnUiThread {
+            state.value = state.value.copy(
+                speechLanguages = listOf(
+                    SpeechLanguage.Automatic,
+                    pending.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.Ready),
+                ),
+            )
+        }
+        composeRule.waitForIdle()
+        val stoppedAt = actions.size
+        composeRule.mainClock.advanceTimeBy(SPEECH_PACK_RECHECK_INTERVAL_MILLIS * 2)
+        composeRule.waitForIdle()
+
+        assertEquals(stoppedAt, actions.size)
+    }
+
+    @Test fun pendingSpeechPackRechecksAreBounded() {
+        val pending = SpeechLanguage.Installed(
+            "ja-JP",
+            "Japanese (Japan)",
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+        )
+        val actions = mutableListOf<UiAction>()
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            RefreshPendingSpeechPacks(
+                SessionUiState(SessionPhase.Ready, speechLanguages = listOf(SpeechLanguage.Automatic, pending)),
+                actions::add,
+            )
+        }
+
+        composeRule.mainClock.advanceTimeBy(
+            SPEECH_PACK_RECHECK_INTERVAL_MILLIS * (SPEECH_PACK_RECHECK_ATTEMPTS + 2),
+        )
+        composeRule.waitForIdle()
+
+        assertEquals(SPEECH_PACK_RECHECK_ATTEMPTS, actions.size)
+    }
+
     @Test fun failedSpeechPackRequestOffersVoiceInputSettingsFallback() {
         var settingsOpened = false
         setApp(

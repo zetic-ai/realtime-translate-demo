@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -103,6 +104,7 @@ fun TurnTranslateRoot(
     val languageToast = stringResource(R.string.toast_language_applied)
 
     KeepScreenAwake(state)
+    RefreshPendingSpeechPacks(state, onAction)
     ComfortHaptics(state, haptics)
     val speechOutput = rememberSpeechOutput()
 
@@ -305,6 +307,31 @@ fun TurnTranslateRoot(
 data class ConsentPrompt(val cellularWarning: Boolean)
 
 // region Session comfort shells
+
+internal const val SPEECH_PACK_RECHECK_INTERVAL_MILLIS = 2_000L
+internal const val SPEECH_PACK_RECHECK_ATTEMPTS = 60
+
+/**
+ * Android can acknowledge a speech-pack request before the pack is installed. Recheck only while
+ * this screen is visible, and stop after a bounded window or as soon as no requested pack is
+ * pending. A later foreground transition gets the activity's normal one-shot catalog refresh.
+ */
+@Composable
+internal fun RefreshPendingSpeechPacks(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val pendingTags = state.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+        .filter { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
+        .map { it.languageTag.lowercase(java.util.Locale.ROOT) }
+        .toSet()
+    val shouldRecheck = pendingTags.isNotEmpty() && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    LaunchedEffect(shouldRecheck, pendingTags) {
+        if (!shouldRecheck) return@LaunchedEffect
+        repeat(SPEECH_PACK_RECHECK_ATTEMPTS) {
+            delay(SPEECH_PACK_RECHECK_INTERVAL_MILLIS)
+            onAction(UiAction.RefreshSpeechLanguages)
+        }
+    }
+}
 
 /**
  * Holds the display awake in exactly the states where push-to-talk is on screen, and hands it back

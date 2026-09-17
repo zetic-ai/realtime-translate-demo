@@ -148,11 +148,13 @@ interface SpeechLanguageCatalog {
     fun requestDownload(
         context: Context,
         language: SpeechLanguage.Installed,
-        onResult: (Boolean) -> Unit,
+        onResult: (SpeechModelDownloadResult) -> Unit,
     ): Boolean
 }
 
 data class SpeechLanguageCatalogResult(val languages: List<SpeechLanguage>, val message: UiText? = null)
+
+enum class SpeechModelDownloadResult { Completed, Scheduled, Failed }
 
 class AndroidSpeechLanguageCatalog(
     private val platform: OnDeviceSpeechRecognizerPlatform = AndroidOnDeviceSpeechRecognizerPlatform,
@@ -196,7 +198,7 @@ class AndroidSpeechLanguageCatalog(
     override fun requestDownload(
         context: Context,
         language: SpeechLanguage.Installed,
-        onResult: (Boolean) -> Unit,
+        onResult: (SpeechModelDownloadResult) -> Unit,
     ): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             !SpeechModelDownloadRequest.shouldTrigger(language) ||
@@ -312,7 +314,7 @@ interface OnDeviceSpeechRecognizerPlatform {
         recognizer: SpeechRecognizer,
         intent: Intent,
         executor: Executor,
-        onResult: (Boolean) -> Unit,
+        onResult: (SpeechModelDownloadResult) -> Unit,
     ): Boolean
 }
 
@@ -329,7 +331,7 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
         recognizer: SpeechRecognizer,
         intent: Intent,
         executor: Executor,
-        onResult: (Boolean) -> Unit,
+        onResult: (SpeechModelDownloadResult) -> Unit,
     ): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || Looper.myLooper() != Looper.getMainLooper()) return false
         return runCatching {
@@ -337,7 +339,9 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
                 triggerModelDownloadWithListener(recognizer, intent, executor, onResult)
             } else {
                 recognizer.triggerModelDownload(intent)
-                onResult(true)
+                // Android 13 only confirms that the request was accepted; it has no completion
+                // listener, so RecognitionSupport must be rechecked while the UI remains visible.
+                onResult(SpeechModelDownloadResult.Scheduled)
             }
         }.isSuccess
     }
@@ -347,13 +351,13 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
         recognizer: SpeechRecognizer,
         intent: Intent,
         executor: Executor,
-        onResult: (Boolean) -> Unit,
+        onResult: (SpeechModelDownloadResult) -> Unit,
     ) {
         var finished = false
-        fun finish(success: Boolean) {
+        fun finish(result: SpeechModelDownloadResult) {
             if (!finished) {
                 finished = true
-                onResult(success)
+                onResult(result)
             }
         }
         recognizer.triggerModelDownload(
@@ -361,9 +365,9 @@ object AndroidOnDeviceSpeechRecognizerPlatform : OnDeviceSpeechRecognizerPlatfor
             executor,
             object : ModelDownloadListener {
                 override fun onProgress(completedPercent: Int) = Unit
-                override fun onSuccess() = finish(true)
-                override fun onScheduled() = finish(true)
-                override fun onError(error: Int) = finish(false)
+                override fun onSuccess() = finish(SpeechModelDownloadResult.Completed)
+                override fun onScheduled() = finish(SpeechModelDownloadResult.Scheduled)
+                override fun onError(error: Int) = finish(SpeechModelDownloadResult.Failed)
             },
         )
     }

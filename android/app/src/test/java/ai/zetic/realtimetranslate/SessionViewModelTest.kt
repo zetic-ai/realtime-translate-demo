@@ -110,9 +110,71 @@ class SessionViewModelTest {
         assertEquals(SpeechLanguage.Automatic, viewModel.state.value.settingsFor(Speaker.A).inputLanguage)
     }
 
+    @Test fun `completed speech pack becomes ready without restarting the app`() = runTest {
+        val downloadable = SpeechLanguage.Installed("fr-CA", "French (Canada)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        val ready = downloadable.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.Ready)
+        val catalog = FakeCatalog(
+            listOf(SpeechLanguage.Automatic, downloadable),
+            requestResult = SpeechModelDownloadResult.Completed,
+        )
+        catalog.onRequest = { catalog.languages = listOf(SpeechLanguage.Automatic, ready) }
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            speechLanguageCatalog = catalog,
+            initialState = SessionUiState(
+                phase = SessionPhase.Ready,
+                conversationStarted = true,
+                speechLanguages = listOf(SpeechLanguage.Automatic, downloadable),
+            ),
+        )
+
+        viewModel.dispatch(SessionAction.RequestSpeechModelDownload(TestContext(), downloadable))
+
+        assertEquals(1, catalog.loadRequests)
+        assertEquals(
+            SpeechLanguage.OnDeviceStatus.Ready,
+            viewModel.state.value.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .first { it.languageTag == "fr-CA" }.onDeviceStatus,
+        )
+    }
+
+    @Test fun `scheduled speech pack becomes ready on a later foreground catalog recheck`() = runTest {
+        val downloadable = SpeechLanguage.Installed("ja-JP", "Japanese (Japan)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
+        val ready = downloadable.copy(onDeviceStatus = SpeechLanguage.OnDeviceStatus.Ready)
+        val catalog = FakeCatalog(listOf(SpeechLanguage.Automatic, downloadable))
+        catalog.onRequest = { catalog.languages = listOf(SpeechLanguage.Automatic, ready) }
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            speechLanguageCatalog = catalog,
+            initialState = SessionUiState(SessionPhase.Ready),
+        )
+        viewModel.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        viewModel.dispatch(SessionAction.RequestSpeechModelDownload(TestContext(), downloadable))
+
+        assertEquals(1, catalog.loadRequests)
+        assertEquals(
+            SpeechLanguage.OnDeviceStatus.DownloadPending,
+            viewModel.state.value.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .first { it.languageTag == "ja-JP" }.onDeviceStatus,
+        )
+
+        viewModel.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        assertEquals(2, catalog.loadRequests)
+        assertEquals(
+            SpeechLanguage.OnDeviceStatus.Ready,
+            viewModel.state.value.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+                .first { it.languageTag == "ja-JP" }.onDeviceStatus,
+        )
+    }
+
     @Test fun `failed speech pack request restores downloadable state and offers settings fallback`() = runTest {
         val french = SpeechLanguage.Installed("fr-FR", "French (France)", SpeechLanguage.OnDeviceStatus.DownloadRequired)
-        val catalog = FakeCatalog(listOf(SpeechLanguage.Automatic, french), requestResult = false)
+        val catalog = FakeCatalog(
+            listOf(SpeechLanguage.Automatic, french),
+            requestResult = SpeechModelDownloadResult.Failed,
+        )
         val viewModel = SessionViewModel(
             translator = FakeTranslator(),
             speechLanguageCatalog = catalog,
@@ -124,6 +186,24 @@ class SessionViewModelTest {
 
         assertEquals(SpeechLanguage.OnDeviceStatus.DownloadRequired, (viewModel.state.value.speechLanguages[1] as SpeechLanguage.Installed).onDeviceStatus)
         assertEquals(UiText.res(R.string.speech_model_download_failed), viewModel.state.value.speechModelDownloadError)
+    }
+
+    @Test fun `catalog rechecks preserve a speech pack failure fallback`() = runTest {
+        val pending = SpeechLanguage.Installed("ja-JP", "Japanese (Japan)", SpeechLanguage.OnDeviceStatus.DownloadPending)
+        val error = UiText.res(R.string.speech_model_download_failed)
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            speechLanguageCatalog = FakeCatalog(listOf(SpeechLanguage.Automatic, pending)),
+            initialState = SessionUiState(
+                phase = SessionPhase.Ready,
+                speechLanguages = listOf(SpeechLanguage.Automatic, pending),
+                speechModelDownloadError = error,
+            ),
+        )
+
+        viewModel.dispatch(SessionAction.RefreshSpeechLanguages(TestContext()))
+
+        assertEquals(error, viewModel.state.value.speechModelDownloadError)
     }
 
     @Test fun `an explicit spoken language survives the catalog arriving`() = runTest {
@@ -621,18 +701,23 @@ class SessionViewModelTest {
     }
 
     private class FakeCatalog(
-        private val languages: List<SpeechLanguage>,
-        private val requestResult: Boolean = true,
+        var languages: List<SpeechLanguage>,
+        private val requestResult: SpeechModelDownloadResult = SpeechModelDownloadResult.Scheduled,
     ) : SpeechLanguageCatalog {
         val downloadRequests = mutableListOf<String>()
-        override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) =
+        var loadRequests = 0
+        var onRequest: () -> Unit = {}
+        override fun load(context: Context, onResult: (SpeechLanguageCatalogResult) -> Unit) {
+            loadRequests += 1
             onResult(SpeechLanguageCatalogResult(languages))
+        }
         override fun requestDownload(
             context: Context,
             language: SpeechLanguage.Installed,
-            onResult: (Boolean) -> Unit,
+            onResult: (SpeechModelDownloadResult) -> Unit,
         ): Boolean {
             downloadRequests += language.languageTag
+            onRequest()
             onResult(requestResult)
             return true
         }

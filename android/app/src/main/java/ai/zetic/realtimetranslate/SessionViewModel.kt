@@ -129,7 +129,11 @@ class SessionViewModel(
     }
 
     private fun refreshSpeechLanguages(context: Context) {
-        if (mutableState.value.conversationStarted || mutableState.value.speechLanguageCatalogLoading) return
+        if ((mutableState.value.conversationStarted && requestedSpeechModelTags.isEmpty()) ||
+            mutableState.value.speechLanguageCatalogLoading
+        ) {
+            return
+        }
         mutableState.value = mutableState.value.copy(speechLanguageCatalogLoading = true, speechLanguageCatalogMessage = null)
         speechLanguageCatalog.load(context.applicationContext) { result ->
             val validLanguages = result.languages.ifEmpty { listOf(SpeechLanguage.Automatic) }
@@ -168,7 +172,6 @@ class SessionViewModel(
                 speechLanguages = languagesWithRequestedDownloads,
                 speechLanguageCatalogLoading = false,
                 speechLanguageCatalogMessage = result.message,
-                speechModelDownloadError = null,
             )
             aligned.forEach { (speaker, settings) ->
                 languagePreferences?.setReadingCode(speaker, settings.readingLanguage.code)
@@ -200,8 +203,12 @@ class SessionViewModel(
             speechModelDownloadError = null,
         )
 
-        val started = speechLanguageCatalog.requestDownload(context.applicationContext, catalogLanguage) { success ->
-            if (!success) publishSpeechModelDownloadFailure(catalogLanguage.languageTag)
+        val started = speechLanguageCatalog.requestDownload(context.applicationContext, catalogLanguage) { result ->
+            when (result) {
+                SpeechModelDownloadResult.Completed -> refreshSpeechLanguages(context.applicationContext)
+                SpeechModelDownloadResult.Scheduled -> Unit
+                SpeechModelDownloadResult.Failed -> publishSpeechModelDownloadFailure(catalogLanguage.languageTag)
+            }
         }
         if (!started) publishSpeechModelDownloadFailure(catalogLanguage.languageTag)
     }

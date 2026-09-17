@@ -87,6 +87,7 @@ import kotlin.math.max
 
 sealed interface UiAction {
     data object RequestPermission : UiAction
+    data object RefreshSpeechLanguages : UiAction
     data class SelectInput(val speaker: Speaker, val language: SpeechLanguage) : UiAction
     data class RequestSpeechModelDownload(val language: SpeechLanguage.Installed) : UiAction
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
@@ -106,6 +107,7 @@ sealed interface UiAction {
 
 fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.RequestPermission -> SessionAction.Retry
+    UiAction.RefreshSpeechLanguages -> SessionAction.RefreshSpeechLanguages(context)
     is UiAction.SelectInput -> SessionAction.InputLanguageChanged(speaker, language)
     is UiAction.RequestSpeechModelDownload -> SessionAction.RequestSpeechModelDownload(context, language)
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
@@ -229,7 +231,9 @@ fun RealtimeTranslateApp(
             fontSize = 12.sp,
             modifier = Modifier.semantics { contentDescription = statusAccessibility },
         )
-        if (state.speechLanguageCatalogLoading) {
+        val pendingSpeechPack = state.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+            .any { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
+        if (state.speechLanguageCatalogLoading && !pendingSpeechPack) {
             Text(stringResource(R.string.speech_catalog_loading), color = TextSecondary, fontSize = 12.sp)
         }
         state.speechLanguageCatalogMessage?.let { Text(it.text(), color = TextSecondary, fontSize = 12.sp) }
