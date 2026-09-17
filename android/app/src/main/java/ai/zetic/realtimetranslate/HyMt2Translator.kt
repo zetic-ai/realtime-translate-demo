@@ -42,7 +42,7 @@ class MelangeHyMt2Translator(
                 context = context,
                 personalKey = personalKey,
                 name = MODEL_NAME,
-                version = null,
+                version = MODEL_VERSION,
                 modelMode = LLMModelMode.RUN_AUTO,
                 onDownload = onProgress,
             ),
@@ -99,6 +99,7 @@ class MelangeHyMt2Translator(
 
     companion object {
         const val MODEL_NAME = "SJ_zetic/Hy-MT2-1.8B"
+        const val MODEL_VERSION = 1
     }
 }
 

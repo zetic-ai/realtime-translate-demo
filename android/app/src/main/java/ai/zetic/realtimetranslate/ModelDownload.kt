@@ -57,7 +57,7 @@ private object AndroidModelDownloadSdk : ModelDownloadSdk {
             context = context,
             personalKey = personalKey,
             name = MelangeHyMt2Translator.MODEL_NAME,
-            version = null,
+            version = MelangeHyMt2Translator.MODEL_VERSION,
             modelMode = LLMModelMode.RUN_AUTO,
         )
 
