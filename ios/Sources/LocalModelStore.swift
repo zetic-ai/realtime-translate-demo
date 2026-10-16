@@ -317,7 +317,7 @@ enum LocalModelStore {
   /// that will not parse yields nil, which is what makes both the footprint and the delete refuse
   /// a cache they cannot read.
   private static func resolveModelKey(_ name: String, cacheRoot root: URL,
-                                      allowSoleKeyFallback: Bool = true) -> String? {
+                                      allowSoleKeyFallback: Bool = false) -> String? {
     for fileExtension in ["ztc", "gguf"] {
       guard let index = readIndex(root, fileExtension: fileExtension) else { return nil }
       if let key = resolveModelKey(name, in: index, allowSoleKeyFallback: allowSoleKeyFallback) {
@@ -327,15 +327,11 @@ enum LocalModelStore {
     return nil
   }
 
-  /// The index's own name mapping, or the sole model key on disk when there is exactly one. More
-  /// than one and no mapping means we cannot tell which archive belongs to this app's model.
-  ///
-  /// The fallback is a guess, and it is only ever the right kind of guess for loading: the worst a
-  /// wrong one costs there is an init that fails and a remote load that runs instead. A caller
-  /// that is about to remove files by name passes `allowSoleKeyFallback: false`, because the same
-  /// guess there deletes somebody else's model out of a shared cache.
+  /// Relais now owns two language models. Loading an unnamed sole cache entry can silently
+  /// run translation weights for a summary (or vice versa), so both loading and deletion require
+  /// the index's explicit name mapping by default.
   private static func resolveModelKey(_ name: String, in index: Index,
-                                      allowSoleKeyFallback: Bool = true) -> String? {
+                                      allowSoleKeyFallback: Bool = false) -> String? {
     if let key = index.modelKeysByName[name] { return key }
     guard allowSoleKeyFallback else { return nil }
     let keys = Set(index.entries.map(\.modelKey))

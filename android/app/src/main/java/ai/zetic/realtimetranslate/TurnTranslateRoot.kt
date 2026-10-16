@@ -28,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,7 +86,12 @@ fun TurnTranslateRoot(
     isMetered: () -> Boolean,
     hasPersonalKey: Boolean,
     onOpenVoiceInputSettings: () -> Unit = {},
+    history: SessionHistory? = null,
+    onGenerateSummary: (String) -> Unit = {},
 ) {
+    var showHistory by remember { mutableStateOf(false) }
+    var savedId by remember { mutableStateOf<String?>(null) }
+    var confirmEnd by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerToast = rememberToastState()
@@ -133,6 +140,7 @@ fun TurnTranslateRoot(
 
     fun handle(action: UiAction) {
         when {
+            action == UiAction.EndSession && history != null -> { confirmEnd = true }
             action == UiAction.StartConversation -> requestSessionStart(action)
             action == UiAction.Retry && state.phase == SessionPhase.ModelLoadFailed -> requestSessionStart(action)
             else -> {
@@ -195,6 +203,9 @@ fun TurnTranslateRoot(
                         ) {
                             Row(Modifier.fillMaxHeight()) {
                                 Box(Modifier.fillMaxHeight().width(1.dp).background(DividerLine))
+                                Column {
+                                TextButton(onClick = { savedId = null; showHistory = true; scope.launch { drawerState.close() } },
+                                    enabled = state.activeSpeaker() == null) { Text(stringResource(R.string.history_title)) }
                                 SettingsDrawerContent(
                                     appInfo = appInfo,
                                     canClearConversation = state.canClearConversation,
@@ -219,6 +230,7 @@ fun TurnTranslateRoot(
                                     },
                                     onClose = { scope.launch { drawerState.close() } },
                                 )
+                                }
                             }
                         }
                     }
@@ -245,6 +257,24 @@ fun TurnTranslateRoot(
                 }
             }
         }
+
+        if (showHistory && history != null) {
+            SessionHistoryScreen(history, state.conversationStarted || state.phase == SessionPhase.LoadingModel,
+                initialId = savedId, generate = onGenerateSummary, close = { showHistory = false })
+        }
+        if (confirmEnd) AlertDialog(onDismissRequest = { confirmEnd = false },
+            title = { Text(stringResource(R.string.history_end_question)) },
+            text = { Text(stringResource(R.string.history_end_detail)) },
+            confirmButton = { TextButton(onClick = {
+                val hadTurns = state.conversations.any { it.isFinal && it.transcript.isNotBlank() }
+                speechOutput.stop(); onAction(UiAction.EndSession); confirmEnd = false
+                if (history != null && !history.state.value.storageFailed) {
+                    savedId = if (hadTurns) history.state.value.sessions.firstOrNull()?.id else null
+                    showHistory = savedId != null
+                }
+            }) { Text(stringResource(R.string.history_end_save)) } },
+            dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text(stringResource(R.string.history_continue)) } })
+        history?.let { HistoryStorageNotice(it) }
 
         when (FirstRunStep.step(welcomeSeen, primingSeen, state.phase == SessionPhase.PermissionRequired)) {
             FirstRunStep.Welcome -> WelcomeSurface {
@@ -500,12 +530,7 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
 }
 
 @Composable private fun ZeticLockup() {
-    androidx.compose.foundation.Image(
-        painterResource(R.drawable.zetic_logo),
-        contentDescription = "ZETIC",
-        contentScale = ContentScale.Fit,
-        modifier = Modifier.height(16.dp),
-    )
+    Text("Relais", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 }
 
 @Composable private fun PrimaryAction(label: String, onClick: () -> Unit) {
@@ -528,3 +553,11 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
 }
 
 // endregion
+
+@Composable private fun HistoryStorageNotice(history: SessionHistory) {
+    val state by history.state.collectAsStateWithLifecycle()
+    if (state.storageFailed) Column(Modifier.fillMaxWidth().background(Surface).padding(16.dp)) {
+        Text(stringResource(R.string.history_storage_error), color = Error)
+        TextButton(onClick = history::retryStorage) { Text(stringResource(R.string.history_retry)) }
+    }
+}

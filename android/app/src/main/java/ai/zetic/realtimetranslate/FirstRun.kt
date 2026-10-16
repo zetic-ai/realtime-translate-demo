@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 
 /**
- * Everything the first run of Zetic Relay needs to decide what to show and when: the remembered
+ * Everything the first run of Relais needs to decide what to show and when: the remembered
  * flags, the step they imply, the model-download consent decision, and the copy the first-run
  * surfaces render. Kept out of the composables so every decision is testable without UI.
  *
@@ -147,7 +147,7 @@ object ModelDownloadConsent {
  * surfaces as a resource, so the French and Spanish passes cover them without touching this file.
  */
 object FirstRunCopy {
-    const val PRODUCT_NAME = "Turn Translate"
+    const val PRODUCT_NAME = "Relais"
 }
 
 /** The consent card's one composed sentence: a translated frame around a hedged, formatted size. */

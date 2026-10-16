@@ -1,6 +1,7 @@
 package ai.zetic.realtimetranslate
 
 import android.content.Context
+import java.io.File
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeticai.mlange.core.background.BackgroundDownloadState
@@ -44,6 +45,9 @@ class SessionViewModel(
     private val audioInterruptionFactory: (Context) -> RecordingAudioInterruption = { AndroidRecordingAudioInterruption(it) },
     initialState: SessionUiState = SessionUiState(SessionPhase.PermissionRequired),
 ) : ViewModel() {
+    var history = SessionHistory(scope = viewModelScope)
+        private set
+    private var persistentHistory = false
     private val mutableState = MutableStateFlow(initialState)
     val state: StateFlow<SessionUiState> = mutableState.asStateFlow()
     private var transcriber: SpeechTranscriber? = null
@@ -103,6 +107,13 @@ class SessionViewModel(
         mutableState.value = current.copy(settings = current.settings + (speaker to updated))
         languagePreferences?.setReadingCode(speaker, updated.readingLanguage.code)
         languagePreferences?.setSpokenTag(speaker, updated.inputLanguage.preferenceTag)
+    }
+
+    fun restoreHistory(context: Context) {
+        if (!persistentHistory) {
+            history = SessionHistory(SessionFileStore(File(context.noBackupFilesDir, "relais-sessions")), viewModelScope)
+            persistentHistory = true
+        }
     }
 
     private fun restoreLanguagePreferences(context: Context) {
@@ -357,6 +368,7 @@ class SessionViewModel(
         if (!modelLoadStarted) return
         modelLoadJob = viewModelScope.launch {
             runCatching {
+                history.stopAndWait()
                 translator.load(context, loadProgress@{ progress ->
                     runForCurrentModelLoad(loadGeneration, downloadGeneration) {
                         val current = mutableState.value
@@ -367,6 +379,7 @@ class SessionViewModel(
                 })
             }.onSuccess {
                 runForCurrentModelLoad(loadGeneration, downloadGeneration) {
+                    history.beginCapture()
                     mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = true, modelLoadProgress = 1f)
                 }
             }.onFailure { error ->
@@ -555,6 +568,7 @@ class SessionViewModel(
             provisionalTranslation = existing.provisionalTranslation,
         )
         mutableState.value = current.copy(conversations = current.conversations.map { if (it.id == id) item else it })
+        if (isFinal) checkpointHistory()
         if (!isFinal && transcript.isNotBlank()) schedulePartialTranslation(item)
     }
 
@@ -642,6 +656,7 @@ class SessionViewModel(
     }
 
     private fun startFinalTranslation(item: ConversationItem) {
+        checkpointHistory()
         val prompt = HyMt2TranslationRequestBuilder.build(item.transcript, item.targetLanguage)
         val requestGeneration = translationGeneration.incrementAndGet()
         translationJob?.cancel()
@@ -661,12 +676,14 @@ class SessionViewModel(
         if (!current.conversationStarted || activeItemId != id || translationGeneration.get() != requestGeneration) return
         endLiveTranslation()
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, provisionalTranslation = null, translationError = null) else it })
+        checkpointHistory()
     }
     private fun failTranslation(id: String, requestGeneration: Long, message: UiText) {
         val current = mutableState.value
         if (!current.conversationStarted || activeItemId != id || translationGeneration.get() != requestGeneration) return
         endLiveTranslation()
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(provisionalTranslation = null, translationError = message) else it })
+        checkpointHistory()
     }
     private fun fail(message: UiText, owner: SpeechTranscriber? = transcriber) {
         if (owner !== transcriber || !mutableState.value.conversationStarted) return
@@ -682,12 +699,20 @@ class SessionViewModel(
             errorMessage = message,
         )
     }
-    /**
-     * Ending a session stops recognition and clears the conversation but keeps the model resident,
-     * so the next Start conversation reaches Ready without loading again. The model is released in
-     * [onCleared], when the view model itself goes away.
-     */
+    /** Persist finalized originals even when their translation fails. */
+    private fun savedTurns() = mutableState.value.conversations.filter { it.isFinal && it.transcript.isNotBlank() }.map {
+        SavedTurn(it.id, it.speaker.label, it.transcript, it.translation,
+            (it.sourceLanguage as? SpeechLanguage.Installed)?.languageTag ?: "auto", it.targetLanguage.code)
+    }
+    private fun checkpointHistory() { val turns = savedTurns(); if (turns.isNotEmpty()) history.checkpoint(turns) }
+    fun summarizeSession(context: Context, id: String) {
+        if (mutableState.value.conversationStarted || mutableState.value.phase == SessionPhase.LoadingModel) return
+        history.summarize(context.applicationContext, id) { translator.unload() }
+    }
+
     private fun endSession() {
+        val turns = savedTurns()
+        if (turns.isNotEmpty() && history.checkpoint(turns, ending = true) == null) return
         if (mutableState.value.phase == SessionPhase.LoadingModel || mutableState.value.backgroundDownload?.isActive == true) {
             cancelModelPreparation()
             return
@@ -712,6 +737,8 @@ class SessionViewModel(
     private fun clearConversation() {
         val current = mutableState.value
         if (!current.canClearConversation) return
+        val turns = savedTurns()
+        if (turns.isNotEmpty() && history.checkpoint(turns, ending = true) == null) return
         mutableState.value = current.copy(conversations = emptyList())
     }
 
@@ -751,6 +778,7 @@ class SessionViewModel(
         }
     }
     override fun onCleared() {
+        history.interrupt()
         invalidateBackgroundDownloadWork()
         invalidateModelLoadWork()
         translationGeneration.incrementAndGet()

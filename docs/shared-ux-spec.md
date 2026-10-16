@@ -1,3 +1,7 @@
+# Earlier translation flow reference
+
+The current Relais interface, branding, transcript hierarchy, storage and summary behavior are specified in [Relais design and session contract](relais.md). The sections below document the pre-Relais translation flow; where they differ, the Relais contract applies.
+
 # Shared Android/iOS UX and Design Specification
 
 ## Consistency principles

@@ -4,7 +4,7 @@
          an AppCompat delegate to re-apply that choice. -->
     <style name="Theme.RealtimeTranslate" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#2DBDB2</item>
+        <item name="android:colorAccent">#25465F</item>
         <item name="android:colorBackground">#FFFFFF</item>
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>

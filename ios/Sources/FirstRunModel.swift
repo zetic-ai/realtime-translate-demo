@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-/// Everything the first run of Turn Translate needs to decide what to show and when: the two
+/// Everything the first run of Relais needs to decide what to show and when: the two
 /// remembered flags, the step they imply, the model-download consent decision, and the copy the
 /// first-run surfaces render. Kept out of the views so every decision is testable without UI.
 ///
