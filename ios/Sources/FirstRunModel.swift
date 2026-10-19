@@ -19,12 +19,12 @@ enum FirstRunDefaults {
 
   /// Applied before any view reads `@AppStorage`, so the very first render already sees the forced
   /// state. `-resetFirstRun` clears the flags on its own; `-firstRun` also selects the model
-  /// presence the consent step keys off (see `FirstRunModel.fromLaunchArguments`).
+  /// consent the download step keys off (see `FirstRunModel.fromLaunchArguments`).
   ///
   /// - `-resetFirstRun`: clear both flags.
-  /// - `-firstRun fresh`: clear both flags, no local model.
-  /// - `-firstRun returning`: set both flags, local model present.
-  /// - `-firstRun consentNeeded`: set both flags, no local model.
+  /// - `-firstRun fresh`: clear both flags, no download consent.
+  /// - `-firstRun returning`: set both flags, download consent granted.
+  /// - `-firstRun consentNeeded`: set both flags, no download consent.
   /// - `-firstRunCellular`: report the current network path as expensive.
   static func applyLaunchArguments(_ arguments: [String] = ProcessInfo.processInfo.arguments,
                                    to defaults: UserDefaults = .standard) {
@@ -143,8 +143,8 @@ enum ModelDownloadSize {
   }
 }
 
-/// Whether starting a session has to ask first. A model already on disk loads locally in seconds
-/// with no network at all, so the consent step exists only for a genuine first download.
+/// Whether the user has approved SDK-managed model preparation. The SDK decides whether its
+/// existing cache can be reused; the app never infers that decision from private cache files.
 enum ModelDownloadConsent {
   enum Decision: Equatable {
     case startImmediately
@@ -155,9 +155,9 @@ enum ModelDownloadConsent {
   /// promises a transfer that ends a frame later in `The Melange personal key is not configured in
   /// this app build.` The start runs instead, and the load reports that failure where every other
   /// model failure is reported: the session banner, with its retry.
-  static func decision(hasLocalModel: Bool, cost: NetworkPathCost,
+  static func decision(hasDownloadConsent: Bool, cost: NetworkPathCost,
                        hasPersonalKey: Bool = true) -> Decision {
-    guard !hasLocalModel, hasPersonalKey else { return .startImmediately }
+    guard !hasDownloadConsent, hasPersonalKey else { return .startImmediately }
     return .ask(cellularWarning: cost.isCostly)
   }
 }
@@ -290,14 +290,12 @@ final class FirstRunModel: ObservableObject {
     let cellularWarning: Bool
   }
 
-  /// Mirrors the model `MelangeTranslationRuntime` loads. Kept here so the consent decision can ask
-  /// the read-only `LocalModelStore` about it without reaching into the runtime.
+  /// Mirrors the model `MelangeTranslationRuntime` loads and the SDK background job prepares.
   static let modelName = "SJ_zetic/Hy-MT2-1.8B"
 
   @Published private(set) var consent: ConsentPrompt?
 
   private let path: any NetworkPathReporting
-  private let hasLocalModel: () -> Bool
   private let hasPersonalKey: () -> Bool
   private let hasDownloadConsent: () -> Bool
   private var pendingStart: (() -> Void)?
@@ -305,13 +303,11 @@ final class FirstRunModel: ObservableObject {
   /// Nonisolated so it can be a SwiftUI view's default argument, which is always evaluated outside
   /// the actor. It only stores its collaborators; nothing here touches published state.
   nonisolated init(path: any NetworkPathReporting = NetworkPathObserver(),
-                   hasLocalModel: @escaping () -> Bool = FirstRunModel.localModelExists,
                    hasPersonalKey: @escaping () -> Bool = FirstRunModel.personalKeyConfigured,
                    hasDownloadConsent: @escaping () -> Bool = {
                      UserDefaults.standard.bool(forKey: TranslationModelDownloadCoordinator.consentKey)
                    }) {
     self.path = path
-    self.hasLocalModel = hasLocalModel
     self.hasPersonalKey = hasPersonalKey
     self.hasDownloadConsent = hasDownloadConsent
   }
@@ -319,18 +315,22 @@ final class FirstRunModel: ObservableObject {
   nonisolated static func fromLaunchArguments(
     _ arguments: [String] = ProcessInfo.processInfo.arguments
   ) -> FirstRunModel {
-    let localModel: () -> Bool
+    let downloadConsent: () -> Bool
     // A forced first-run state also forces the key: `-firstRun` exists so a UI test can drive the
     // consent card, and a test build that happens to carry no key would otherwise skip it.
     var personalKey = FirstRunModel.personalKeyConfigured
     switch FirstRunDefaults.value(named: "-firstRun", in: arguments) {
-    case "fresh", "consentNeeded": localModel = { false }; personalKey = { true }
-    case "returning": localModel = { true }; personalKey = { true }
-    default: localModel = FirstRunModel.localModelExists
+    case "fresh", "consentNeeded": downloadConsent = { false }; personalKey = { true }
+    case "returning": downloadConsent = { true }; personalKey = { true }
+    default:
+      downloadConsent = {
+        UserDefaults.standard.bool(forKey: TranslationModelDownloadCoordinator.consentKey)
+      }
     }
     let path: any NetworkPathReporting = arguments.contains("-firstRunCellular")
       ? FixedNetworkPath(.expensive) : NetworkPathObserver()
-    return FirstRunModel(path: path, hasLocalModel: localModel, hasPersonalKey: personalKey)
+    return FirstRunModel(path: path, hasPersonalKey: personalKey,
+                         hasDownloadConsent: downloadConsent)
   }
 
   /// Whether this build can download anything at all. The same reading the runtime does, so the
@@ -339,22 +339,11 @@ final class FirstRunModel: ObservableObject {
     !MelangeCredential.value(from: Bundle.main.infoDictionary ?? [:]).isEmpty
   }
 
-  /// A complete extracted module or a complete archive both mean the next start is a local load.
-  nonisolated static func localModelExists() -> Bool {
-    LocalModelStore.discoverExtractedModule(forModelName: modelName) != nil
-      || LocalModelStore.discoverArchive(forModelName: modelName) != nil
-  }
-
-  /// Gates a session start. With the model already on disk the start runs straight through, so a
-  /// returning user never sees a download step for a download that will not happen.
+  /// Consent applies across launches; model readiness is checked separately using the SDK's
+  /// background-download status before the root view starts a foreground model.
   func requestSessionStart(_ start: @escaping () -> Void) {
-    // A prior explicit decision applies to the same model on later launches. The coordinator then
-    // resumes its durable SDK handle instead of presenting a second consent card.
-    if !hasLocalModel(), hasDownloadConsent() {
-      start()
-      return
-    }
-    switch ModelDownloadConsent.decision(hasLocalModel: hasLocalModel(), cost: path.currentCost,
+    switch ModelDownloadConsent.decision(hasDownloadConsent: hasDownloadConsent(),
+                                        cost: path.currentCost,
                                         hasPersonalKey: hasPersonalKey()) {
     case .startImmediately:
       start()

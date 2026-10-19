@@ -120,8 +120,7 @@ final class SessionFileStore {
   init(store: SessionFileStore? = nil, runtime: (any TranslationRuntime)? = nil) {
     self.store = store
     self.runtime = runtime ?? MelangeTranslationRuntime(modelName: SummaryEngine.modelName, version: 1,
-                                                       maxOutputTokens: 2048, contextSize: 4096,
-                                                       expectedModelKey: SummaryEngine.modelKey)
+                                                       maxOutputTokens: 2048, contextSize: 4096)
     do {
       sessions = try store?.load() ?? []
       // A process death leaves a readable session and an explicit retry, never a permanent spinner.
@@ -240,7 +239,6 @@ enum SummaryError: Error { case invalidOutput }
 
 enum SummaryEngine {
   static let modelName = "zetic/LFM2.5-1.2B-Instruct"
-  static let modelKey = "1401c9e207e142e082563c15d1301293"
   /// Bounded by UTF-8 bytes (not English words). Long turns are split without dropping text;
   /// each piece retains its original citation. Each chunk is summarized and kept in order.
   static func chunks(_ turns: [SavedTurn], limit: Int = 1200) -> [[SavedTurn]] {

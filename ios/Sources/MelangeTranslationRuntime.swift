@@ -60,8 +60,7 @@ struct TranslationResponseAccumulator {
   }
 }
 
-/// The one loaded-model surface the runtime needs, so a model can come from the managed remote
-/// flow or from a file already on disk.
+/// The loaded-model surface used by the runtime and its lifecycle tests.
 protocol LoadedLanguageModel: AnyObject {
   func run(_ text: String) throws
   func waitForNextToken() -> LLMNextTokenResult
@@ -71,25 +70,14 @@ protocol LoadedLanguageModel: AnyObject {
 
 extension ZeticMLangeLLMModel: LoadedLanguageModel {}
 
-/// The SDK's direct GGUF loader has the same run surface but releases through `forceDeinit`.
-final class LlamaCppLoadedModel: LoadedLanguageModel {
-  private let model: LLaMACppTargetModel
-  init(_ model: LLaMACppTargetModel) { self.model = model }
-  func run(_ text: String) throws { try model.run(text) }
-  func waitForNextToken() -> LLMNextTokenResult { model.waitForNextToken() }
-  func cleanUp() throws { try model.cleanUp() }
-  func close() { model.forceDeinit() }
-}
-
 final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
   private let modelName: String
   private let version: Int?
   private let maxOutputTokens: Int?
   private let contextSize: Int
-  private let expectedModelKey: String?
 
   /// Builds the loaded model. Injected only by tests, which cannot reach a 1.9 GB SDK download;
-  /// the app always takes the local-then-remote path in `makeModel`.
+  /// the app always uses the SDK-managed initializer in `makeModel`.
   typealias ModelFactory = @Sendable (_ onProgress: @escaping @Sendable (Double) -> Void) async throws
     -> any LoadedLanguageModel
 
@@ -115,12 +103,11 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
 
   init(personalKey: String? = nil, infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
        modelFactory: ModelFactory? = nil, modelName: String = "SJ_zetic/Hy-MT2-1.8B", version: Int? = nil, maxOutputTokens: Int? = nil,
-       contextSize: Int = 2048, expectedModelKey: String? = nil) {
+       contextSize: Int = 2048) {
     self.modelName = modelName
     self.version = version
     self.maxOutputTokens = maxOutputTokens
     self.contextSize = contextSize
-    self.expectedModelKey = expectedModelKey
     self.personalKey = personalKey ?? MelangeCredential.value(from: infoDictionary)
     self.modelFactory = modelFactory
   }
@@ -179,10 +166,6 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
 
   private func makeModel(onProgress: @escaping @Sendable (Double) -> Void) async throws -> any LoadedLanguageModel {
     if let modelFactory { return try await modelFactory(onProgress) }
-    // No download callback fires on the local path, so `onProgress` stays uncalled and the screen
-    // keeps its indeterminate loading state.
-    try Task.checkCancellation()
-    if let local = await loadLocalModel() { return local }
     // The last chance to stop before the SDK claims the network: everything past this line is a
     // transfer that runs to completion whatever the app does.
     try Task.checkCancellation()
@@ -197,54 +180,6 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
       initOption: LLMInitOption(nCtx: contextSize),
       onDownload: { progress in onProgress(Double(progress)) }
     )
-  }
-
-  /// The SDK re-derives its cache key from the presigned download URL, so a cold launch can restart
-  /// a finished 1.9 GB download from zero. Loading the model already on disk avoids that; any
-  /// failure here returns nil and the remote flow runs unchanged. Runs on `queue` because the local
-  /// inits are synchronous and slow.
-  private func loadLocalModel() async -> (any LoadedLanguageModel)? {
-    await withCheckedContinuation { continuation in
-      queue.async {
-        LocalModelStore.sweepOrphans()
-        continuation.resume(returning: Self.makeLocalModel(modelName: self.modelName, contextSize: self.contextSize, expectedModelKey: self.expectedModelKey))
-      }
-    }
-  }
-
-  // Keep the repository's pinned SDK: its local archive and GGUF APIs preserve offline loading.
-  private static func makeLocalModel(modelName: String, contextSize: Int, expectedModelKey: String?) -> (any LoadedLanguageModel)? {
-    if modelName == "SJ_zetic/Hy-MT2-1.8B", let module = LocalModelStore.discoverExtractedModule(forModelName: modelName),
-       let quantType = llamaCppQuantType(forModuleNamed: module.url.lastPathComponent) {
-      for apType in [APType.GPU, APType.CPU] {
-        if let model = try? LLaMACppTargetModel(module.url.path, quantType, apType) {
-          NSLog("model load: reusing extracted module, no network needed")
-          return LlamaCppLoadedModel(model)
-        }
-      }
-    }
-    if let archive = LocalModelStore.discoverArchive(forModelName: modelName),
-       expectedModelKey == nil || archive.modelKey == expectedModelKey {
-      let secretKeyHex = LocalModelStore.secretKeyHex(forArtifactID: archive.artifactID)
-      if let model = try? ZeticMLangeLLMModel(
-        localZtcURL: archive.url, secretKeyHex: secretKeyHex, modelKey: archive.modelKey, initOption: LLMInitOption(nCtx: contextSize)
-      ) {
-        NSLog("model load: reusing downloaded archive, no network needed")
-        return model
-      }
-    }
-    NSLog("model load: no reusable local model, using remote flow")
-    return nil
-  }
-
-  static func llamaCppQuantType(forModuleNamed name: String) -> LLMQuantType? {
-    guard name.contains("LLAMA_CPP") else { return nil }
-    let markers: [(String, LLMQuantType)] = [
-      ("_Q8_0", .GGUF_QUANT_Q8_0), ("_Q6_K", .GGUF_QUANT_Q6_K), ("_Q4_K_M", .GGUF_QUANT_Q4_K_M),
-      ("_Q3_K_M", .GGUF_QUANT_Q3_K_M), ("_Q2_K", .GGUF_QUANT_Q2_K), ("_BF16", .GGUF_QUANT_BF16),
-      ("_F16", .GGUF_QUANT_F16),
-    ]
-    return markers.first { name.contains($0.0) }?.1
   }
 
   func translate(prompt: String) async throws -> String {

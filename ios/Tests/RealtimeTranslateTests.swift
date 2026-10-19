@@ -1011,130 +1011,6 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertNil(SessionState.setup.activeSpeaker)
   }
 
-  func testDiscoverArchiveReturnsTheCompleteArchiveNamedByTheCacheIndex() throws {
-    let root = try makeCacheFixture()
-
-    let archive = LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root)
-
-    XCTAssertEqual(archive?.artifactID, "llmTargetModel-c488c23ffebf7fd0")
-    XCTAssertEqual(archive?.modelKey, "aaaa")
-    XCTAssertEqual(archive?.url.lastPathComponent, "Hy_MT2_1.ztc")
-  }
-
-  func testSummaryCannotReuseTheOnlyTranslationArchive() throws {
-    let root = try makeCacheFixture()
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: SummaryEngine.modelName, cacheRoot: root))
-    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-  }
-
-  func testDiscoverArchiveSkipsAnArchiveShorterThanTheIndexedByteCount() throws {
-    let root = try makeCacheFixture(archiveByteCount: 4, indexedByteCount: 8)
-
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-  }
-
-  func testDiscoverArchiveReturnsNilForAnUnrecognisedIndexInsteadOfFailing() throws {
-    let root = try makeCacheFixture()
-    try "{\"schemaVersion\":99,\"artifacts\":\"unexpected\"}"
-      .write(to: root.appendingPathComponent("cache-index.json"), atomically: true, encoding: .utf8)
-
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root.appendingPathComponent("missing")))
-  }
-
-  func testSecretKeyHexComesFromTheBackendSelectionRecordForThatArtifact() throws {
-    let root = try makeCacheFixture()
-
-    XCTAssertEqual(LocalModelStore.secretKeyHex(forArtifactID: "llmTargetModel-c488c23ffebf7fd0", cacheRoot: root),
-                   String(repeating: "0", count: 64))
-    XCTAssertNil(LocalModelStore.secretKeyHex(forArtifactID: "llmTargetModel-0000000000000000", cacheRoot: root))
-  }
-
-  func testSweepOrphansRemovesOnlyPartialDownloadsAndEmptyUnindexedArtifactDirectories() throws {
-    let root = try makeCacheFixture()
-    let manager = FileManager.default
-    let models = root.appendingPathComponent("artifacts/aaaa", isDirectory: true)
-    let kept = [
-      models.appendingPathComponent("llmTargetModel-c488c23ffebf7fd0"),
-      models.appendingPathComponent("llmTargetModel-ABCDEF0123456789"),
-      models.appendingPathComponent("llmTargetModel-short"),
-      root.appendingPathComponent("staging-locks")
-    ]
-    for directory in kept.dropFirst() {
-      try manager.createDirectory(at: directory, withIntermediateDirectories: true)
-    }
-    let swept = models.appendingPathComponent("llmTargetModel-0123456789abcdef")
-    try manager.createDirectory(at: swept, withIntermediateDirectories: true)
-    let temporary = root.appendingPathComponent("tmp", isDirectory: true)
-    try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
-    let partial = temporary.appendingPathComponent("CFNetworkDownload_ab12cd.tmp")
-    let unrelated = temporary.appendingPathComponent("keep-me.tmp")
-    try Data([0]).write(to: partial)
-    try Data([0]).write(to: unrelated)
-
-    LocalModelStore.sweepOrphans(cacheRoot: root)
-
-    XCTAssertFalse(manager.fileExists(atPath: swept.path))
-    XCTAssertFalse(manager.fileExists(atPath: partial.path))
-    XCTAssertTrue(manager.fileExists(atPath: unrelated.path))
-    for directory in kept { XCTAssertTrue(manager.fileExists(atPath: directory.path), directory.lastPathComponent) }
-  }
-
-  /// The app's temporary directory is `URLSession`'s too, and a `CFNetworkDownload_*.tmp` sitting
-  /// in it is as likely to be the resumable remains of this model's own 1.9 GB transfer as it is
-  /// to be an abandoned one. The sweep runs at the top of every load, so deleting from there turns
-  /// a download that could resume into one that starts again at zero.
-  func testSweepOrphansLeavesPartialDownloadsOutsideTheCacheRootAlone() throws {
-    let root = try makeCacheFixture()
-    let manager = FileManager.default
-    // The real shared directory, because that is the one the sweep used to reach into. The name
-    // is this test's own, and it is removed however the test ends.
-    let sharedPartial = manager.temporaryDirectory
-      .appendingPathComponent("CFNetworkDownload_\(UUID().uuidString).tmp")
-    try Data([0]).write(to: sharedPartial)
-    addTeardownBlock { try? manager.removeItem(at: sharedPartial) }
-    let ownPartial = root.appendingPathComponent("tmp/CFNetworkDownload_ef34ab.tmp")
-    try manager.createDirectory(at: ownPartial.deletingLastPathComponent(),
-                                withIntermediateDirectories: true)
-    try Data([0]).write(to: ownPartial)
-
-    LocalModelStore.sweepOrphans(cacheRoot: root)
-
-    XCTAssertTrue(manager.fileExists(atPath: sharedPartial.path))
-    XCTAssertFalse(manager.fileExists(atPath: ownPartial.path))
-  }
-
-  /// The two index readings are two views of one file. An artifact whose only stored file is the
-  /// extracted `.gguf` is absent from the `.ztc` reading, and counting only that reading makes the
-  /// live model's own directory look like an id nobody claims.
-  func testSweepOrphansCountsAnArtifactKnownOnlyToTheModuleIndexAsKnown() throws {
-    let root = try makeCacheFixture(moduleByteCount: 16)
-    let manager = FileManager.default
-    let directory = root.appendingPathComponent("artifacts/aaaa/llmTargetModel-c488c23ffebf7fd0")
-    // An artifact the SDK has extracted and tidied up after: its index record names the `.gguf`
-    // and nothing else, so the archive reading of the same file does not know the id at all.
-    let indexURL = root.appendingPathComponent("cache-index.json")
-    var index = try XCTUnwrap(
-      JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any]
-    )
-    var artifacts = try XCTUnwrap(index["artifacts"] as? [[String: Any]])
-    artifacts[0]["storedFiles"] = (artifacts[0]["storedFiles"] as? [[String: Any]])?
-      .filter { ($0["relativePath"] as? String)?.hasSuffix(".gguf") == true }
-    index["artifacts"] = artifacts
-    try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
-    XCTAssertNotNil(LocalModelStore.discoverExtractedModule(forModelName: "SJ_zetic/Hy-MT2-1.8B",
-                                                            cacheRoot: root))
-    // The sweep only removes empty directories, so the live artifact is emptied but kept: this is
-    // the shape a mid-extraction cache has, and the id is the only thing telling them apart.
-    for file in try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
-      try manager.removeItem(at: file)
-    }
-
-    LocalModelStore.sweepOrphans(cacheRoot: root)
-
-    XCTAssertTrue(manager.fileExists(atPath: directory.path))
-  }
-
   // MARK: - Translation runtime lifecycle
 
   /// The interleaving: `load` starts and reaches the SDK init, `close` runs while the model is
@@ -1318,7 +1194,7 @@ final class RealtimeTranslateTests: XCTestCase {
 
   private static func countedFirstRun(_ counter: Counter) -> FirstRunModel {
     _ = counter.increment()
-    return FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { true })
+    return FirstRunModel(path: FixedNetworkPath(.unrestricted), hasDownloadConsent: { true })
   }
 
   /// The wordmark stopped being a control and a standalone menu button took the drawer over, so
@@ -1403,26 +1279,26 @@ final class RealtimeTranslateTests: XCTestCase {
       FirstRunStep.step(welcomeSeen: true, primingSeen: true, permissionNeeded: true), .none)
   }
 
-  func testConsentIsSkippedWhenTheModelIsAlreadyOnDiskAndAskedWhenItIsNot() {
+  func testConsentIsSkippedAfterAnAcceptedSDKDownloadAndAskedBeforeTheFirstDownload() {
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: true, cost: .unrestricted), .startImmediately)
-    // A local model means no transfer at all, so an expensive path is beside the point.
+      ModelDownloadConsent.decision(hasDownloadConsent: true, cost: .unrestricted), .startImmediately)
+    // A prior consent lets the SDK resume its managed download without asking again.
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: true, cost: .expensive), .startImmediately)
+      ModelDownloadConsent.decision(hasDownloadConsent: true, cost: .expensive), .startImmediately)
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .unrestricted),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .unrestricted),
       .ask(cellularWarning: false))
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .expensive),
       .ask(cellularWarning: true))
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .constrained),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .constrained),
       .ask(cellularWarning: true))
   }
 
-  func testSessionStartRunsStraightThroughWhenTheModelIsLocal() {
+  func testSessionStartRunsStraightThroughAfterDownloadConsentWasSaved() {
     var starts = 0
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { true })
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasDownloadConsent: { true })
 
     firstRun.requestSessionStart { starts += 1 }
 
@@ -1434,8 +1310,8 @@ final class RealtimeTranslateTests: XCTestCase {
     var starts = 0
     // The key is stated rather than read: a simulator build carries no Melange personal key, and a
     // build that cannot download at all is a different decision (see the test further down).
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false },
-                                 hasPersonalKey: { true })
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasPersonalKey: { true },
+                                 hasDownloadConsent: { false })
 
     firstRun.requestSessionStart { starts += 1 }
     XCTAssertEqual(starts, 0)
@@ -1451,20 +1327,20 @@ final class RealtimeTranslateTests: XCTestCase {
   /// runs instead and that failure is reported where every other model failure is: the banner.
   func testConsentIsNotOfferedOnABuildThatCannotDownloadAnything() {
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .unrestricted, hasPersonalKey: false),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .unrestricted, hasPersonalKey: false),
       .startImmediately
     )
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive, hasPersonalKey: false),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .expensive, hasPersonalKey: false),
       .startImmediately
     )
     XCTAssertEqual(
-      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive, hasPersonalKey: true),
+      ModelDownloadConsent.decision(hasDownloadConsent: false, cost: .expensive, hasPersonalKey: true),
       .ask(cellularWarning: true)
     )
 
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false },
-                                 hasPersonalKey: { false })
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasPersonalKey: { false },
+                                 hasDownloadConsent: { false })
     var started = 0
     firstRun.requestSessionStart { started += 1 }
 
@@ -1474,8 +1350,8 @@ final class RealtimeTranslateTests: XCTestCase {
 
   func testDecliningConsentDismissesTheStepWithoutStartingTheDownload() {
     var starts = 0
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { false },
-                                 hasPersonalKey: { true })
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasPersonalKey: { true },
+                                 hasDownloadConsent: { false })
 
     firstRun.requestSessionStart { starts += 1 }
     XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
@@ -1495,7 +1371,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(SessionState.loadingModel(0.32).title, "Downloading translation model 32%")
     XCTAssertNil(ModelPreparationStatus.status(for: nil).progress)
     XCTAssertNil(ModelPreparationStatus.status(for: nil).detail)
-    // 0 and 1 are the local-load bookends, not a download in flight.
+    // 0 and 1 are transfer bookends, not a download in flight.
     XCTAssertFalse(ModelPreparationStatus.status(for: 0).isDownloading)
     XCTAssertFalse(ModelPreparationStatus.status(for: 1).isDownloading)
 
@@ -1531,7 +1407,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertNil(FirstRunDefaults.value(named: "-uiState", in: ["-uiState"]))
   }
 
-  func testConsentNeededLaunchArgumentForcesAMissingModelAndACellularPath() {
+  func testConsentNeededLaunchArgumentForcesAFirstSDKDownloadAndACellularPath() {
     let consentNeeded = FirstRunModel.fromLaunchArguments(["-firstRun", "consentNeeded", "-firstRunCellular"])
     consentNeeded.requestSessionStart {}
     XCTAssertEqual(consentNeeded.consent, FirstRunModel.ConsentPrompt(cellularWarning: true))
@@ -2713,156 +2589,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertFalse(AudioInterruptionCopy.notice.isEmpty)
   }
 
-  // MARK: - Model storage
-
-  func testFootprintNamesTheArchiveTheModuleAndEverythingADeleteWouldReclaim() throws {
-    let root = try makeCacheFixture(archiveByteCount: 8, indexedByteCount: 8, moduleByteCount: 16)
-
-    let footprint = LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root)
-
-    XCTAssertEqual(footprint.archiveBytes, 8)
-    XCTAssertEqual(footprint.moduleBytes, 16)
-    // The whole model directory, counted once, which is exactly what the delete removes.
-    XCTAssertEqual(footprint.totalBytes, 24)
-    XCTAssertFalse(footprint.isEmpty)
-
-    // An archive on its own still reports, and an empty cache reports nothing rather than failing.
-    let archiveOnly = try makeCacheFixture()
-    XCTAssertEqual(
-      LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: archiveOnly).moduleBytes, 0
-    )
-    XCTAssertTrue(
-      LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B",
-                                cacheRoot: root.appendingPathComponent("missing")).isEmpty
-    )
-    XCTAssertTrue(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: nil).isEmpty)
-  }
-
-  func testDeletingRemovesExactlyThisModelsArtifactsAndIndexEntries() throws {
-    let root = try makeCacheFixture(moduleByteCount: 16)
-    let manager = FileManager.default
-    let neighbour = root.appendingPathComponent("artifacts/bbbb/llmTargetModel-1111111111111111",
-                                                isDirectory: true)
-    try manager.createDirectory(at: neighbour, withIntermediateDirectories: true)
-
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
-                   .deleted)
-
-    // The model's own directory is gone, and so are the index records naming it.
-    XCTAssertFalse(manager.fileExists(atPath: root.appendingPathComponent("artifacts/aaaa").path))
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-    XCTAssertNil(LocalModelStore.discoverExtractedModule(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-    XCTAssertTrue(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root).isEmpty)
-    let index = try JSONSerialization.jsonObject(
-      with: Data(contentsOf: root.appendingPathComponent("cache-index.json"))
-    ) as? [String: Any]
-    XCTAssertEqual((index?["artifacts"] as? [[String: Any]])?.count, 0)
-    XCTAssertEqual((index?["resolvedModels"] as? [[String: Any]])?.count, 0)
-    XCTAssertEqual(index?["schemaVersion"] as? Int, 1)
-
-    // Everything the SDK owns is left alone: another model's artifacts, the backend-selection
-    // records the decryption key lives in, and the staging locks.
-    XCTAssertTrue(manager.fileExists(atPath: neighbour.path))
-    XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("staging-locks").path))
-    XCTAssertTrue(manager.fileExists(
-      atPath: root.appendingPathComponent("backend-selection-last-known-good/dummy.json").path
-    ))
-
-    // A second delete finds an index that no longer names this model. There is nothing left to
-    // identify, so it refuses rather than guessing at a directory.
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
-                   .refused)
-
-    // An index that still names a model whose directory is already gone is the one case that is
-    // neither a delete nor a refusal: the stale records are swept and nothing is removed.
-    let stale = try makeCacheFixture()
-    try manager.removeItem(at: stale.appendingPathComponent("artifacts/aaaa"))
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: stale),
-                   .nothingToDelete)
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: stale))
-  }
-
-  func testDeletingRefusesAnIndexItCannotReadOrAModelKeyThatEscapesTheArtifactsRoot() throws {
-    let manager = FileManager.default
-    let unparseable = try makeCacheFixture()
-    let indexURL = unparseable.appendingPathComponent("cache-index.json")
-    try "{\"schemaVersion\":99,\"artifacts\":\"unexpected\"}"
-      .write(to: indexURL, atomically: true, encoding: .utf8)
-
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: unparseable),
-                   .refused)
-    XCTAssertTrue(manager.fileExists(atPath: unparseable.appendingPathComponent("artifacts/aaaa").path))
-
-    // A key that is not a plain directory name is refused before any path is built from it, so a
-    // model key of ".." cannot reach the cache root or anything beside it.
-    for escape in ["..", "../escape", "nested/key", ""] {
-      let container = manager.temporaryDirectory.appendingPathComponent("Escape-\(UUID().uuidString)")
-      let root = container.appendingPathComponent("ZeticMLangeCache", isDirectory: true)
-      addTeardownBlock { try? manager.removeItem(at: container) }
-      try manager.createDirectory(at: root.appendingPathComponent("artifacts", isDirectory: true),
-                                  withIntermediateDirectories: true)
-      let sibling = container.appendingPathComponent("escape", isDirectory: true)
-      try manager.createDirectory(at: sibling, withIntermediateDirectories: true)
-      let index = """
-        {"schemaVersion":1,"artifacts":[],"resolvedModels":[{"logicalRef":{"kind":"llm",\
-        "name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"\(escape)"}]}
-        """
-      try index.write(to: root.appendingPathComponent("cache-index.json"), atomically: true,
-                      encoding: .utf8)
-
-      XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
-                     .refused, escape)
-      XCTAssertTrue(manager.fileExists(atPath: sibling.path), escape)
-      XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("artifacts").path), escape)
-    }
-
-    // No cache directory at all is refused too, rather than reaching for a default root.
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: nil), .refused)
-  }
-
-  /// The index is rewritten before anything is removed, and the write is checked. A cache root
-  /// that cannot be written to stands in for the disk-full case: without the check, the model
-  /// directory is already gone by the time the write fails, leaving an index that promises a model
-  /// that is not there and a drawer confirming a delete that only half happened.
-  func testADeleteWhoseIndexWriteFailsRefusesAndLeavesTheModelWhereItWas() throws {
-    let root = try makeCacheFixture(moduleByteCount: 16)
-    let manager = FileManager.default
-    let directory = root.appendingPathComponent("artifacts/aaaa")
-    try manager.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
-    addTeardownBlock {
-      try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
-    }
-
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
-                   .refused)
-
-    XCTAssertTrue(manager.fileExists(atPath: directory.path))
-    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-    XCTAssertFalse(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root).isEmpty)
-  }
-
-  func testDeletingRefusesACacheWhoseIndexDoesNotNameThisModel() throws {
-    let root = try makeCacheFixture()
-    let manager = FileManager.default
-    let indexURL = root.appendingPathComponent("cache-index.json")
-    var index = try XCTUnwrap(
-      JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any]
-    )
-    index["resolvedModels"] = [[String: Any]]()
-    try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
-
-    // With two models, loading must refuse the same ambiguous cache as deletion.
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
-                   .refused)
-    XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("artifacts/aaaa").path))
-  }
-
-  /// The `Storage` row is gone from the drawer, and with it every string it carried. The
-  /// machinery underneath it is not: the footprint reading and the delete stay whole and stay
-  /// tested above, as a dormant capability a later row or a low-storage prompt can pick up.
-  func testTheStorageRowLeftNothingBehindButKeptItsMachinery() throws {
+  func testStorageStringsRemainAbsentFromTheCatalog() throws {
     let catalog = try Self.stringCatalog()
 
     for key in ["Storage", "No model downloaded", "Delete downloaded model", "Keep it",
@@ -2871,33 +2598,6 @@ final class RealtimeTranslateTests: XCTestCase {
                 "storage.confirmationMessage", "storage.accessibility.locked"] {
       XCTAssertNil(catalog.strings[key], "\(key) belongs to a row that no longer exists")
     }
-
-    // The one place a byte count still becomes words, and the size the consent card is built on.
-    XCTAssertEqual(ModelDownloadSize.size(bytes: ModelDownloadSize.bytes), "1.91 GB")
-  }
-
-  func testTheDownloadConsentGateReArmsOnceTheModelIsDeleted() throws {
-    let root = try makeCacheFixture(moduleByteCount: 16)
-    let name = "SJ_zetic/Hy-MT2-1.8B"
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: {
-      LocalModelStore.discoverExtractedModule(forModelName: name, cacheRoot: root) != nil
-        || LocalModelStore.discoverArchive(forModelName: name, cacheRoot: root) != nil
-    }, hasPersonalKey: { true })
-
-    // With the model on disk the start runs straight through, exactly as it does today.
-    var started = 0
-    firstRun.requestSessionStart { started += 1 }
-    XCTAssertEqual(started, 1)
-    XCTAssertNil(firstRun.consent)
-
-    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: name, cacheRoot: root), .deleted)
-
-    // The very next start is a first download again, so it has to ask.
-    firstRun.requestSessionStart { started += 1 }
-    XCTAssertEqual(started, 1)
-    XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
-    firstRun.acceptConsent()
-    XCTAssertEqual(started, 2)
   }
 
   // MARK: - Localization
@@ -3163,59 +2863,6 @@ final class RealtimeTranslateTests: XCTestCase {
       id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
       translation: "Bonjour.", state: .translated
     )
-  }
-
-  /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key. Passing
-  /// `moduleByteCount` adds the extracted `.gguf` beside the archive, which is what a cache looks
-  /// like once a model has actually been loaded once.
-  private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8,
-                                moduleByteCount: Int? = nil) throws -> URL {
-    let modelKey = "aaaa"
-    let manager = FileManager.default
-    let container = manager.temporaryDirectory.appendingPathComponent("LocalModelStore-\(UUID().uuidString)")
-    let root = container.appendingPathComponent("ZeticMLangeCache", isDirectory: true)
-    addTeardownBlock { try? manager.removeItem(at: container) }
-    let relativePath = "artifacts/\(modelKey)/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.ztc"
-    let archive = root.appendingPathComponent(relativePath)
-    try manager.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try Data(repeating: 0, count: archiveByteCount).write(to: archive)
-    var storedFiles = [
-      """
-      {"byteCount":\(indexedByteCount),"checksum":"00000000000000000000000000000000",\
-      "relativePath":"\(relativePath)","validationState":"checksumValidated"}
-      """
-    ]
-    if let moduleByteCount {
-      let modulePath = "artifacts/\(modelKey)/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.gguf"
-      let module = root.appendingPathComponent(modulePath)
-      try Data(repeating: 0, count: moduleByteCount).write(to: module)
-      storedFiles.append(
-        """
-        {"byteCount":\(moduleByteCount),"checksum":"00000000000000000000000000000000",\
-        "relativePath":"\(modulePath)","validationState":"checksumValidated"}
-        """
-      )
-    }
-    let index = """
-      {"schemaVersion":1,"artifacts":[{"createdAt":809969480.2,"id":"llmTargetModel-c488c23ffebf7fd0",\
-      "kind":"llmTargetModel","modelKey":"\(modelKey)","ownedArtifactIDs":[],"primaryRelativePath":"\(relativePath)",\
-      "selector":{"apType":"GPU","llmTarget":"LLAMA_CPP"},"storedFiles":[\(storedFiles.joined(separator: ","))],\
-      "updatedAt":809969480.2}],\
-      "resolvedModels":[{"logicalRef":{"kind":"llm","name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"\(modelKey)",\
-      "updatedAt":809969926.4}]}
-      """
-    try index.write(to: root.appendingPathComponent("cache-index.json"), atomically: true, encoding: .utf8)
-    let records = root.appendingPathComponent("backend-selection-last-known-good", isDirectory: true)
-    try manager.createDirectory(at: records, withIntermediateDirectories: true)
-    let record = """
-      {"candidate_artifact_id":"llmTargetModel-c488c23ffebf7fd0","schema_version":1,\
-      "response":{"candidate":{"checksum":"00000000000000000000000000000000",\
-      "secret_key":"\(String(repeating: "0", count: 64))"},"model_key":"\(modelKey)"}}
-      """
-    try record.write(to: records.appendingPathComponent("dummy.json"), atomically: true, encoding: .utf8)
-    try manager.createDirectory(at: root.appendingPathComponent("staging-locks", isDirectory: true),
-                                withIntermediateDirectories: true)
-    return root
   }
 
   // MARK: - Designer review fixes

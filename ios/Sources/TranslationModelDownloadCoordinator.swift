@@ -74,21 +74,68 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     case failed(String)
   }
 
+  /// The SDK owns cache discovery, transfers, and removal. These operations are injectable so
+  /// lifecycle tests can exercise consent and relaunch without downloading a model.
+  struct SDKClient {
+    var download: () async throws -> BackgroundDownloadHandle
+    var status: (BackgroundDownloadHandle) async throws -> BackgroundDownloadStatus
+    var stop: (BackgroundDownloadHandle) async throws -> Void
+    var remove: () async throws -> ModelRemovalResult
+
+    static func live(personalKey: String) -> SDKClient {
+      SDKClient(download: {
+        try await ZeticMLangeLLMModel.downloadInBackground(
+          personalKey: personalKey, name: FirstRunModel.modelName,
+          cacheHandlingPolicy: .KEEP_EXISTING
+        )
+      }, status: { try await ZeticMLangeLLMModel.getBackgroundDownloadStatus($0) },
+      stop: { _ = try await ZeticMLangeLLMModel.stopBackgroundDownload($0) },
+      remove: { try await ZeticMLangeLLMModel.removeDownloadedModel(name: FirstRunModel.modelName) })
+    }
+  }
+
   nonisolated static let consentKey = "translationModel.backgroundDownloadConsent"
-  private static let handleKey = "translationModel.backgroundDownloadHandle"
+  static let handleKey = "translationModel.backgroundDownloadHandle"
 
   @Published private(set) var phase: Phase = .idle
   @Published private(set) var isRemoving = false
 
   private let defaults: UserDefaults
   private let personalKey: String
+  private let sdk: SDKClient
+  private var fixtureConsent: Bool?
   private var scheduleTask: Task<Void, Never>?
   private var pollTask: Task<Void, Never>?
 
   init(defaults: UserDefaults = .standard,
-       personalKey: String = MelangeCredential.value(from: Bundle.main.infoDictionary ?? [:])) {
+       personalKey: String = MelangeCredential.value(from: Bundle.main.infoDictionary ?? [:]),
+       sdk: SDKClient? = nil, fixtureConsent: Bool? = nil) {
     self.defaults = defaults
     self.personalKey = personalKey
+    self.sdk = sdk ?? .live(personalKey: personalKey)
+    self.fixtureConsent = fixtureConsent
+  }
+
+  static func fromLaunchArguments(
+    _ arguments: [String] = ProcessInfo.processInfo.arguments
+  ) -> TranslationModelDownloadCoordinator {
+    // Explicit UI scenarios stay in memory and never touch the real model or its saved consent.
+    let scenario = FirstRunDefaults.value(named: "-firstRun", in: arguments)
+    let state = FirstRunDefaults.value(named: "-uiState", in: arguments)
+    let fixture = ["designConversation", "readyWithTranscript", "listeningA", "finalizingA",
+                   "translationError", "setup", "loadingModel", "modelLoadFailed",
+                   "longConversation", "ready", "permissionRequired"].contains(state ?? "")
+    let fixtureConsent: Bool?
+    if fixture {
+      switch scenario {
+      case "fresh", "consentNeeded": fixtureConsent = false
+      case "returning": fixtureConsent = true
+      default: fixtureConsent = UserDefaults.standard.bool(forKey: Self.consentKey)
+      }
+    } else {
+      fixtureConsent = nil
+    }
+    return TranslationModelDownloadCoordinator(fixtureConsent: fixtureConsent)
   }
 
   deinit {
@@ -96,40 +143,52 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     pollTask?.cancel()
   }
 
-  var hasDownloadConsent: Bool { defaults.bool(forKey: Self.consentKey) }
+  var hasDownloadConsent: Bool { fixtureConsent ?? defaults.bool(forKey: Self.consentKey) }
   var isBackgroundDownloadInProgress: Bool { phase.isInProgress }
   var canUseDownloadedModel: Bool { phase == .installed }
 
   /// A returning user has already explicitly approved this transfer, so a launch can resume the
   /// persisted SDK job without showing the consent card again.
-  func resumeIfConsented(hasLocalModel: Bool) {
+  func resumeIfConsented() {
     guard hasDownloadConsent else { return }
-    guard !hasLocalModel else {
-      phase = .installed
-      return
-    }
     scheduleIfNeeded()
   }
 
   func recordConsent() {
-    defaults.set(true, forKey: Self.consentKey)
+    if fixtureConsent != nil {
+      fixtureConsent = true
+    } else {
+      defaults.set(true, forKey: Self.consentKey)
+    }
     scheduleIfNeeded()
   }
 
-  /// Returns false while the SDK job owns model preparation. The caller must not instantiate the
-  /// foreground model in that case: doing so would turn the background transfer into a duplicate
-  /// foreground download.
-  func requestModelUse(hasLocalModel: Bool) -> Bool {
-    if hasLocalModel || canUseDownloadedModel { return true }
-    guard hasDownloadConsent else { return false }
+  /// Only an SDK-installed job can hand model preparation to the foreground runtime. Never race
+  /// its in-progress background transfer with a second foreground download.
+  func requestModelUse() -> Bool {
+    guard !isRemoving, hasDownloadConsent else { return false }
+    if canUseDownloadedModel { return true }
     scheduleIfNeeded()
     return false
   }
 
   func removeDownloadedModel() async -> RemovalOutcome {
     guard !isRemoving else { return .failed("The model removal is already in progress.") }
+    if fixtureConsent != nil {
+      fixtureConsent = false
+      phase = .idle
+      return .removed
+    }
     isRemoving = true
-    defer { isRemoving = false }
+    var removed = false
+    defer {
+      isRemoving = false
+      // A refused/failed removal must not strand a cancelled poll in a progress phase.
+      if !removed, storedHandle != nil {
+        phase = .idle
+        resumeIfConsented()
+      }
+    }
 
     let activePollTask = pollTask
     let activeScheduleTask = scheduleTask
@@ -142,7 +201,7 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
 
     if let handle = storedHandle {
       do {
-        _ = try await ZeticMLangeLLMModel.stopBackgroundDownload(handle)
+        try await sdk.stop(handle)
       } catch {
         // Removal is still authoritative: a completed job can disappear between polling and the
         // stop request, and the SDK's removal result below tells us whether anything remains.
@@ -150,8 +209,9 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     }
 
     do {
-      let result = try await ZeticMLangeLLMModel.removeDownloadedModel(name: FirstRunModel.modelName)
+      let result = try await sdk.remove()
       guard !result.isInUse else { return .inUse }
+      removed = true
       clearConsentAndHandle()
       phase = .idle
       return .removed
@@ -179,17 +239,37 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
   }
 
   private func scheduleIfNeeded() {
-    guard !isRemoving, !phase.isInProgress, phase != .installed else { return }
+    guard hasDownloadConsent, !isRemoving, !phase.isInProgress, phase != .installed else { return }
+    if fixtureConsent != nil {
+      phase = .installed
+      return
+    }
+    let replacingFailedHandle: Bool
+    if case .failed = phase { replacingFailedHandle = storedHandle != nil }
+    else { replacingFailedHandle = false }
     phase = .queued
     scheduleTask?.cancel()
     scheduleTask = Task { [weak self] in
-      await self?.scheduleOrResume()
+      await self?.scheduleOrResume(replacingFailedHandle: replacingFailedHandle)
     }
   }
 
-  private func scheduleOrResume() async {
+  private func scheduleOrResume(replacingFailedHandle: Bool) async {
     defer { scheduleTask = nil }
     guard hasDownloadConsent, !isRemoving else { return }
+
+    if replacingFailedHandle, let handle = storedHandle {
+      do {
+        // A lookup error does not prove the transfer stopped. An explicit retry first asks the
+        // SDK to stop/reconcile the old job, so forgetting a stale handle cannot duplicate it.
+        try await sdk.stop(handle)
+        guard !isRemoving, !Task.isCancelled else { return }
+        storedHandle = nil
+      } catch {
+        phase = .failed(error.localizedDescription)
+        return
+      }
+    }
 
     if let handle = storedHandle {
       await refresh(handle)
@@ -203,13 +283,9 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     }
 
     do {
-      let handle = try await ZeticMLangeLLMModel.downloadInBackground(
-        personalKey: personalKey,
-        name: FirstRunModel.modelName,
-        cacheHandlingPolicy: .KEEP_EXISTING
-      )
+      let handle = try await sdk.download()
       guard !isRemoving, !Task.isCancelled else {
-        _ = try? await ZeticMLangeLLMModel.stopBackgroundDownload(handle)
+        try? await sdk.stop(handle)
         return
       }
       storedHandle = handle
@@ -225,18 +301,21 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     pollTask?.cancel()
     pollTask = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
-        guard !self.isRemoving else { return }
-        await self.refresh(handle)
-        guard !self.isRemoving, self.phase.isInProgress else { return }
+        guard await self?.poll(handle) == true else { return }
         try? await Task.sleep(for: .seconds(1))
       }
     }
   }
 
+  private func poll(_ handle: BackgroundDownloadHandle) async -> Bool {
+    guard !isRemoving else { return false }
+    await refresh(handle)
+    return !isRemoving && phase.isInProgress
+  }
+
   private func refresh(_ handle: BackgroundDownloadHandle) async {
     do {
-      let status = try await ZeticMLangeLLMModel.getBackgroundDownloadStatus(handle)
+      let status = try await sdk.status(handle)
       guard !isRemoving, !Task.isCancelled else { return }
       switch status.state {
       case .queued:
@@ -272,6 +351,7 @@ final class TranslationModelDownloadCoordinator: ObservableObject {
     } catch {
       guard !isRemoving, !Task.isCancelled else { return }
       phase = .failed(error.localizedDescription)
+      // Keep ownership until an explicit retry reconciles the job through the SDK stop API.
     }
   }
 }

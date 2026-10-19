@@ -377,6 +377,33 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   // MARK: - Typed input and clearing
 
+  func testDeviceKeyboardKeepsFieldAndSendVisible() {
+    let app = launch(state: "ready")
+    let input = app.buttons["typed-input"]
+    XCTAssertTrue(input.waitForExistence(timeout: 10))
+    input.tap()
+    let field = app.descendants(matching: .any).matching(identifier: "typed-input-field").firstMatch
+    let send = app.buttons["typed-input-send"]
+    let keyboard = app.keyboards.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+    field.typeText("Keyboard visibility check")
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "iOS-keyboard-field-and-send"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    XCTAssertTrue(field.isHittable)
+    XCTAssertTrue(send.isHittable)
+    XCTAssertLessThanOrEqual(field.frame.maxY, keyboard.frame.minY + 1)
+    XCTAssertLessThanOrEqual(send.frame.maxY, keyboard.frame.minY + 1)
+    XCTAssertTrue(send.isEnabled)
+    send.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    XCTAssertTrue(waitForDisappearance(send, timeout: 5))
+    let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 5))
+    XCTAssertTrue(bubble.label.contains("Keyboard visibility check"))
+  }
+
   func testTypingAMessageProducesThatSpeakersBubble() {
     let app = launch(state: "ready")
     let typedInput = app.buttons["typed-input"]

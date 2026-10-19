@@ -15,6 +15,7 @@
 		2C05AA0A4B39A12183107A76 /* bouygues-speak.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A886037383B13AB2FBF56B81 /* bouygues-speak.ttf */; };
 		36C6FE670D3E40188E33C33E /* SessionComfort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780310E21D20068B1740AD73 /* SessionComfort.swift */; };
 		443036F7CDB26D1AE6CFB6EE /* AudioInterruption.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEAE3493413F94E95B7EE900 /* AudioInterruption.swift */; };
+		49751CEA0E074D5B3E769DA7 /* ModelDownloadCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F812B9EF0068B64A4CE91D00 /* ModelDownloadCoordinatorTests.swift */; };
 		72612CC547B37C8683B4CE3B /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C61319FFF47136929BAF199 /* Models.swift */; };
 		73FEFB4E94F4EA71069FB291 /* TypedInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3AFC7D00DD330A1C60FC5CA /* TypedInput.swift */; };
 		80A85661905D6731180EFF61 /* SettingsDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 260826688BD2D9E6DEA3F2F1 /* SettingsDrawerView.swift */; };
@@ -31,7 +32,7 @@
 		9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */; };
 		9F2FED817A0BA1334D8DAED7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 77B9ED1CAE9D7F4E967F826D /* Localizable.xcstrings */; };
 		A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = 98E43219EA9601F248FA4521 /* ZeticMLange */; };
-		A55AE6021547FD129D79A526 /* LocalModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA31D04C1728DB6AC330181 /* LocalModelStore.swift */; };
+		A4E8908FEABECB385B64AB38 /* DeviceRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A360D29FB9F96C32D0A7D8A /* DeviceRuntimeTests.swift */; };
 		C03DECB7178100E42CD39DA0 /* SpeechOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5142AD3A4DF83370A7CAB5 /* SpeechOutput.swift */; };
 		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
 		D719E3F94F7FC3578995C13A /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A4B2B427538BCA811EB57E /* Localization.swift */; };
@@ -77,7 +78,6 @@
 		623D5E776602979572EB1084 /* SessionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHistory.swift; sourceTree = "<group>"; };
 		643EB71C1BBBD833D363F7FB /* LanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePreferences.swift; sourceTree = "<group>"; };
 		6A745AD61E6561DDF5B669E9 /* RealtimeTranslateAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateAppDelegate.swift; sourceTree = "<group>"; };
-		6BA31D04C1728DB6AC330181 /* LocalModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelStore.swift; sourceTree = "<group>"; };
 		6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateTests.swift; sourceTree = "<group>"; };
 		6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateRootView.swift; sourceTree = "<group>"; };
 		77B9ED1CAE9D7F4E967F826D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -87,6 +87,7 @@
 		8AAECAAD96EF8C6E3325520C /* ConversationFollow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationFollow.swift; sourceTree = "<group>"; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranslation.swift; sourceTree = "<group>"; };
+		9A360D29FB9F96C32D0A7D8A /* DeviceRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRuntimeTests.swift; sourceTree = "<group>"; };
 		A886037383B13AB2FBF56B81 /* bouygues-speak.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bouygues-speak.ttf"; sourceTree = "<group>"; };
 		AF5CC3ACEF2BFC3FFB6A242E /* TranslationModelDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationModelDownloadCoordinator.swift; sourceTree = "<group>"; };
 		B3AFC7D00DD330A1C60FC5CA /* TypedInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedInput.swift; sourceTree = "<group>"; };
@@ -99,6 +100,7 @@
 		E8CA0AA42E468D4F6C86D6C5 /* UtteranceAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceAccumulator.swift; sourceTree = "<group>"; };
 		F0E635E8688EF84DCA1C958E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelangeTranslationRuntime.swift; sourceTree = "<group>"; };
+		F812B9EF0068B64A4CE91D00 /* ModelDownloadCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadCoordinatorTests.swift; sourceTree = "<group>"; };
 		FBBE0472C2470BAAE5A99239 /* SessionHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -118,6 +120,8 @@
 		01CA0422301C66A862B40DC8 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				9A360D29FB9F96C32D0A7D8A /* DeviceRuntimeTests.swift */,
+				F812B9EF0068B64A4CE91D00 /* ModelDownloadCoordinatorTests.swift */,
 				6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */,
 				3E9D630076179C6AB94FF17E /* SessionHistoryTests.swift */,
 			);
@@ -163,7 +167,6 @@
 				99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */,
 				77B9ED1CAE9D7F4E967F826D /* Localizable.xcstrings */,
 				E2A4B2B427538BCA811EB57E /* Localization.swift */,
-				6BA31D04C1728DB6AC330181 /* LocalModelStore.swift */,
 				F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
 				28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */,
@@ -296,7 +299,7 @@
 			mainGroup = FCC65DE793108928FA89CC2C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				F7F52FDF3246A1ED6B056E78 /* XCRemoteSwiftPackageReference "mlange_sdk" */,
+				557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 143A5DA858DAACEABEFF460C /* Products */;
@@ -330,6 +333,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4E8908FEABECB385B64AB38 /* DeviceRuntimeTests.swift in Sources */,
+				49751CEA0E074D5B3E769DA7 /* ModelDownloadCoordinatorTests.swift in Sources */,
 				9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */,
 				20276C7C0A3D70E0998CA681 /* SessionHistoryTests.swift in Sources */,
 			);
@@ -353,7 +358,6 @@
 				28EB34287B125AB2B5BD5034 /* FirstRunViews.swift in Sources */,
 				888B1D32E944556F19D52343 /* LanguagePreferences.swift in Sources */,
 				F61F6CFCA71C16C4E97625F5 /* LiveTranslation.swift in Sources */,
-				A55AE6021547FD129D79A526 /* LocalModelStore.swift in Sources */,
 				D719E3F94F7FC3578995C13A /* Localization.swift in Sources */,
 				8EC6C3010220ACCEC54729E0 /* MelangeTranslationRuntime.swift in Sources */,
 				72612CC547B37C8683B4CE3B /* Models.swift in Sources */,
@@ -660,12 +664,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		F7F52FDF3246A1ED6B056E78 /* XCRemoteSwiftPackageReference "mlange_sdk" */ = {
+		557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "git@github.com:zetic-ai/mlange_sdk.git";
+			repositoryURL = "https://github.com/zetic-ai/ZeticMLangeiOS.git";
 			requirement = {
-				kind = exactVersion;
-				version = "0.0.0-internal.035dd5a8";
+				kind = revision;
+				revision = c5c197ba01c5a05d877e2b0abaa95eb70848fa3d;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -673,7 +677,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		98E43219EA9601F248FA4521 /* ZeticMLange */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F7F52FDF3246A1ED6B056E78 /* XCRemoteSwiftPackageReference "mlange_sdk" */;
+			package = 557694E2D6001AA61FB5A9FD /* XCRemoteSwiftPackageReference "ZeticMLangeiOS" */;
 			productName = ZeticMLange;
 		};
 /* End XCSwiftPackageProductDependency section */
