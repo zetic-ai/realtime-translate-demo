@@ -1,12 +1,18 @@
 package ai.zetic.realtimetranslate
 
+import android.os.Build
+import android.view.inspector.WindowInspector
 import androidx.activity.ComponentActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -26,6 +32,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zeticai.mlange.core.background.BackgroundDownloadState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -316,11 +323,65 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Cancel").performClick()
 
         composeRule.onNodeWithContentDescription("Type a message").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onNodeWithText("What speaker B wants to say in Korean").isDisplayed()
+        }
         composeRule.onNodeWithText("What speaker B wants to say in Korean").assertIsDisplayed()
         composeRule.onNode(hasSetTextAction()).assertIsFocused().performTextInput("again")
         composeRule.onNodeWithText("Send").performClick()
 
         assertEquals(UiAction.SubmitTyped("again", Speaker.B), action)
+    }
+
+    @Test
+    @android.annotation.TargetApi(Build.VERSION_CODES.Q)
+    fun typedInputKeepsSendAboveSoftwareKeyboard() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        var action: UiAction? = null
+        setApp(readyConversationState(), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription("Type a message").performClick()
+        var previousImeBottom = 0
+        var stableImeSamples = 0
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val currentImeBottom = dialogImeGeometry().second
+            if (currentImeBottom > 0 && currentImeBottom == previousImeBottom) {
+                stableImeSamples++
+            } else {
+                stableImeSamples = 0
+            }
+            previousImeBottom = currentImeBottom
+            stableImeSamples >= 3
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).performTextInput("keyboard test")
+        val (windowHeight, imeBottom) = dialogImeGeometry()
+        val imeTop = windowHeight - imeBottom.toFloat()
+        val messageBottom = composeRule.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInWindow.bottom
+        val sendBottom = composeRule.onNodeWithText("Send").fetchSemanticsNode().boundsInWindow.bottom
+
+        assertTrue("Message is covered: bottom=$messageBottom, IME top=$imeTop", messageBottom <= imeTop)
+        assertTrue("Send is covered: bottom=$sendBottom, IME top=$imeTop", sendBottom <= imeTop)
+
+        composeRule.onNodeWithText("Send").performTouchInput { click() }
+        assertEquals(UiAction.SubmitTyped("keyboard test", Speaker.A), action)
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.Q)
+    private fun dialogImeGeometry(): Pair<Int, Int> {
+        var windowHeight = 0
+        var imeBottom = 0
+        composeRule.runOnIdle {
+            val activityWindow = composeRule.activity.window.decorView
+            val sheetWindow = WindowInspector.getGlobalWindowViews()
+                .firstOrNull { it.hasWindowFocus() && it !== activityWindow }
+                ?: throw AssertionError("The typed input sheet window does not have focus")
+            windowHeight = sheetWindow.height
+            imeBottom = ViewCompat.getRootWindowInsets(sheetWindow)
+                ?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
+        }
+        return windowHeight to imeBottom
     }
 
     @Test fun failedBubbleOffersPerBubbleRetry() {
