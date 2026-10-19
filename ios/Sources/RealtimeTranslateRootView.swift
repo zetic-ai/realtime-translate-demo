@@ -664,7 +664,7 @@ private struct ConversationList: View {
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+            .padding(.horizontal, 16).padding(.vertical, 8)
             Color.clear.frame(height: 1).id(Self.bottomAnchor)
           }
           // The offset probe: one reading for the whole transcript, taken from a single
@@ -787,15 +787,13 @@ private struct ConversationBubble: View {
   private var showsReplayControl: Bool { item.speakableTranslation != nil }
 
   var body: some View {
-    HStack(spacing: 0) {
-      if !isA { Spacer(minLength: 16) }
+    ChatBubbleRow(isTrailing: !isA) {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
           Text(verbatim: "\(item.speaker.rawValue) · \(item.targetLanguage.code.uppercased())")
             .font(TrilogyFont.text(.caption2, emphasized: true)).foregroundStyle(item.speaker.deepColor)
             .accessibilityLabel(Text("Speaker \(item.speaker.rawValue)") + Text(verbatim: " · \(item.targetLanguage.code.uppercased())"))
           Text("history.translation").font(TrilogyFont.text(.caption2)).foregroundStyle(DesignToken.textSecondary)
-          Spacer(minLength: 0)
         }
         deliveryLine
         ThinDivider()
@@ -804,7 +802,8 @@ private struct ConversationBubble: View {
           .font(TrilogyFont.original).foregroundStyle(DesignToken.textPrimary)
           .padding(.trailing, showsReplayControl ? 36 : 0)
       }
-      .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+      .fixedSize(horizontal: false, vertical: true)
+      .padding(.horizontal, 16).padding(.vertical, 12)
       .background(item.speaker.tintColor).clipShape(RoundedRectangle(cornerRadius: Layout.message))
       .contentShape(RoundedRectangle(cornerRadius: Layout.message))
       .contextMenu {
@@ -816,7 +815,6 @@ private struct ConversationBubble: View {
       .overlay(alignment: .bottomTrailing) {
         if showsReplayControl { ReplayButton(isEnabled: canReplay, replay: replay) }
       }
-      if isA { Spacer(minLength: 16) }
     }
   }
 

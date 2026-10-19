@@ -12,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -581,7 +579,7 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
             Modifier.fillMaxSize(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         ) {
             if (state.conversations.isEmpty() && state.phase !in setOf(
                     SessionPhase.PermissionRequired,
@@ -673,12 +671,9 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
     val copyable = item.copyableText != null
     val copyAction = stringResource(R.string.bubble_copy_action)
     val bubbleAccessibility = stringResource(R.string.bubble_accessibility, item.speaker.label)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val bubbleMaxWidth = (maxWidth - 16.dp).coerceAtLeast(1.dp)
+    ChatBubbleRow(isA) { bubbleModifier ->
         Column(
-            Modifier
-                .align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
-                .widthIn(max = bubbleMaxWidth).fillMaxWidth()
+            bubbleModifier
                 .clip(MessageShape)
                 .background(speakerTint(item.speaker))
                 .combinedClickable(
@@ -687,7 +682,7 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     onLongClick = { menuExpanded = true },
                     onLongClickLabel = copyAction,
                 )
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .semantics { contentDescription = bubbleAccessibility },
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

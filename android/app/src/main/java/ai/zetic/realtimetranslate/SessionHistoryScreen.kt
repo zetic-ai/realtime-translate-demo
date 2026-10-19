@@ -106,18 +106,19 @@ private fun summaryStatusResource(status: SummaryStatus) = when (status) {
         if (tab == 1) session.turns.indexOfFirst { it.id == focus }.takeIf { it >= 0 }?.let { listState.scrollToItem(it) }
     }
     if (tab == 1) {
-        LazyColumn(state = listState, contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(session.turns, key = { _, turn -> turn.id }) { index, turn ->
-                Column(Modifier.fillMaxWidth().padding(start = if (turn.speaker == "B") 16.dp else 0.dp,
-                    end = if (turn.speaker == "A") 16.dp else 0.dp)
-                    .clip(MessageShape).background(if (turn.speaker == "A") TintA else TintB)
-                    .border(if (focus == turn.id) 2.dp else 0.dp, if (focus == turn.id) AccentB else DividerLine, MessageShape)
-                    .padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${turn.speaker} · ${turn.targetLanguage.uppercase()} · ${index + 1}", fontSize = 11.sp, color = TextSecondary)
-                    if (turn.translation != null) Text(turn.translation, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
-                    else Text(stringResource(R.string.history_translation_unavailable), fontSize = 12.sp)
-                    HorizontalDivider(color = DividerLine)
-                    Text(turn.original, fontSize = 13.sp, lineHeight = 19.sp)
+                ChatBubbleRow(turn.speaker == "A") { bubbleModifier ->
+                    Column(bubbleModifier
+                        .clip(MessageShape).background(if (turn.speaker == "A") TintA else TintB)
+                        .border(if (focus == turn.id) 2.dp else 0.dp, if (focus == turn.id) AccentB else DividerLine, MessageShape)
+                        .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${turn.speaker} · ${turn.targetLanguage.uppercase()} · ${index + 1}", fontSize = 11.sp, color = TextSecondary)
+                        if (turn.translation != null) Text(turn.translation, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
+                        else Text(stringResource(R.string.history_translation_unavailable), fontSize = 12.sp)
+                        HorizontalDivider(color = DividerLine)
+                        Text(turn.original, fontSize = 13.sp, lineHeight = 19.sp)
+                    }
                 }
             }
         }

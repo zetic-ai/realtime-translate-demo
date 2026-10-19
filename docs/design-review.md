@@ -2,11 +2,11 @@
 
 Stacked on PR #4 (`codex/relais-sessions`). This diff refines iOS and Android styling without changing speech, persistence or summary generation.
 
-| Previous PR #4 preview | Updated iOS screen |
+| Previous full-width bubbles | Updated compact bubbles |
 | --- | --- |
 | ![Before](design/conversation-before.png) | ![After](design/conversation-after.png) |
 
-The previous capture is the minimal Hello / Bonjour fixture with English UI text. Updated French captures show two complete English/French exchanges (four alternating A/B turns) about a site visit and preparing a report and valve photos. All dialogue is illustrative fixture text; no model inference is exercised.
+Both captures show the same two complete English/French exchanges (four alternating A/B turns) in the French UI. The comparison isolates the previous full-width layout and the new content-sized bubbles. All dialogue is illustrative fixture text; no model inference is exercised.
 
 ![Saved session with four turns and navy selected segment](design/session-after.png)
 
@@ -15,7 +15,7 @@ The previous capture is the minimal Hello / Bonjour fixture with English UI text
 ## Native adaptation
 
 - Bouygues Speak headings/wordmark, Read Regular body and Read Medium emphasis. Identical TTFs are registered on iOS and bundled as Android font resources. Native Dynamic Type / sp scaling and fallback glyphs remain enabled.
-- Translation stays first and bold, original stays visible below. Live and saved bubbles share 16pt radius/padding; controls use 8pt corners and full-width functional actions have a 48pt minimum height.
+- Translation stays first and bold, original stays visible below. Live and saved bubbles share a 16pt radius, 16pt horizontal / 12pt vertical padding and 16pt outer margins. Width follows the longest content line, capped at 84% of the transcript viewport; A stays left and B right. Controls use 8pt corners and full-width functional actions have a 48pt minimum height.
 - 8pt spacing with 4pt compact increments; navy functional primary, outlined complementary actions, and redundant A/B speaker labels alongside color.
 - Saved-session segments use navy selection and explicit selected accessibility traits on iOS. Android retains native tabs with the Trilogy typography/palette. Native system dialogs, keyboard and platform icons remain native.
 
@@ -34,3 +34,9 @@ Actual summary output quality, peak memory, offline acceptance and physical-devi
 In a Debug simulator build, launch with `-uiState designConversation -firstRun returning -AppleLanguages '(fr)' -AppleLocale fr_FR`. This seeds four turns and consistent English/French language controls using ephemeral preferences. The new preview state and dialogue are excluded from Release. End → Save produces the matching four-turn saved session; no summary model is run. The existing single-turn UI test fixture stays unchanged.
 
 The four-turn Debug build passed and all four translated/original turns were visually checked in the conversation and saved transcript. The main conversation and saved-session/transcript screenshots were replaced together.
+
+## Compact bubble refinement
+
+The same content-driven width rule is implemented in SwiftUI and Compose, including saved transcripts. Short replies no longer expand to the available width. Long text and accessibility sizes wrap within the 84% viewport cap; the font sizes, translation-first order, visible original, copy action and replay control are retained.
+
+The four-turn live conversation and saved transcript were inspected at standard size. Accessibility-extra-large wrapping and replay/text separation were checked, then the simulator size was restored. iOS Simulator Debug and unsigned iPhone Release builds passed. Seven existing iOS UI scenarios passed: save/history, typed input, replay control, initial long-conversation position, jump to latest, copy/toast and bottom-control accessibility. Android unit tests, debug build, lint and instrumentation-source compilation passed. Android UI execution still requires a device/emulator.

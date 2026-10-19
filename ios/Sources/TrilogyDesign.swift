@@ -80,3 +80,33 @@ struct TrilogySessionTabs: View {
       .accessibilityElement(children: .contain).accessibilityLabel(Text("history.content"))
   }
 }
+
+/// Measure the bubble at its natural width, capped at 84% of the transcript viewport.
+/// The row occupies the full width so short A/B replies keep their left/right alignment.
+struct ChatBubbleRow: SwiftUI.Layout {
+  var isTrailing: Bool
+
+  private func measure(_ proposedWidth: CGFloat?, subviews: Subviews) -> (row: CGFloat, bubble: CGSize) {
+    guard let bubble = subviews.first else { return (0, .zero) }
+    let idealWidth = bubble.sizeThatFits(.unspecified).width
+    let available = proposedWidth ?? idealWidth
+    let rowWidth = available.isFinite ? max(1, available) : 320
+    // Both transcript lists have 16pt horizontal content insets.
+    let limit = min(rowWidth, (rowWidth + 32) * 0.84)
+    let width = max(1, min(idealWidth, limit))
+    let size = bubble.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    return (rowWidth, CGSize(width: width, height: size.height))
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let size = measure(proposal.width, subviews: subviews)
+    return CGSize(width: size.row, height: size.bubble.height)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    guard let bubble = subviews.first else { return }
+    let size = measure(bounds.width, subviews: subviews).bubble
+    bubble.place(at: CGPoint(x: isTrailing ? bounds.maxX - size.width : bounds.minX, y: bounds.minY),
+                 anchor: .topLeading, proposal: ProposedViewSize(size))
+  }
+}

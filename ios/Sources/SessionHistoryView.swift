@@ -172,20 +172,22 @@ struct SavedSessionView: View {
       ScrollView {
         LazyVStack(spacing: 8) {
           ForEach(Array(session.turns.enumerated()), id: \.element.id) { index, turn in
-            VStack(alignment: .leading, spacing: 8) {
-              Text(verbatim: "\(turn.speaker) · \(turn.targetLanguage.uppercased()) · \(index + 1)")
-                .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
-              if let translation = turn.translation { Text(verbatim: translation).font(TrilogyFont.translation) }
-              else { Text("history.translationUnavailable").font(TrilogyFont.text(.caption)) }
-              Divider()
-              Text(verbatim: turn.original).font(TrilogyFont.original).textSelection(.enabled)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
-              .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
-              .clipShape(RoundedRectangle(cornerRadius: Layout.message))
-              .overlay(RoundedRectangle(cornerRadius: Layout.message).stroke(focus == turn.id ? DesignToken.accentB : .clear, lineWidth: 2))
-              .padding(turn.speaker == "A" ? .trailing : .leading, 16).id(turn.id)
+            ChatBubbleRow(isTrailing: turn.speaker == "B") {
+              VStack(alignment: .leading, spacing: 8) {
+                Text(verbatim: "\(turn.speaker) · \(turn.targetLanguage.uppercased()) · \(index + 1)")
+                  .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
+                if let translation = turn.translation { Text(verbatim: translation).font(TrilogyFont.translation) }
+                else { Text("history.translationUnavailable").font(TrilogyFont.text(.caption)) }
+                Divider()
+                Text(verbatim: turn.original).font(TrilogyFont.original).textSelection(.enabled)
+              }.fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
+                .clipShape(RoundedRectangle(cornerRadius: Layout.message))
+                .overlay(RoundedRectangle(cornerRadius: Layout.message).stroke(focus == turn.id ? DesignToken.accentB : .clear, lineWidth: 2))
+            }.id(turn.id)
           }
-        }.padding(8)
+        }.padding(.horizontal, 16).padding(.vertical, 8)
       }.onAppear { if let focus { DispatchQueue.main.async { proxy.scrollTo(focus, anchor: .center) } } }
     }
   }

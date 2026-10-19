@@ -1,11 +1,18 @@
 package ai.zetic.realtimetranslate
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Typography
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.Font
@@ -52,6 +59,16 @@ val Error = Color(0xFFD42D02)
 /** `radius.message` and `radius.control`, shared by the main screen, the drawer, and the toast. */
 val MessageShape: Shape = RoundedCornerShape(16.dp)
 val ControlShape: Shape = RoundedCornerShape(8.dp)
+
+/** Both transcript lists use 16dp outer insets. Short replies keep their natural width. */
+@Composable
+fun ChatBubbleRow(isA: Boolean, content: @Composable (Modifier) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val limit = minOf(maxWidth, (maxWidth + 32.dp) * 0.84f)
+        content(Modifier.align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
+            .widthIn(max = limit).width(IntrinsicSize.Max))
+    }
+}
 
 /** `color.scrim`: the dim behind the settings drawer and the first-run consent card. */
 val Scrim = Color.Black.copy(alpha = 0.16f)
