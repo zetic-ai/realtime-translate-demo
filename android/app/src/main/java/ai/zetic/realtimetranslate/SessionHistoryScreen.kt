@@ -34,7 +34,7 @@ fun SessionHistoryScreen(history: SessionHistory, sessionActive: Boolean, initia
     Column(Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent)) {
         if (session == null) {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.history_title), fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.history_title), fontFamily = BouyguesSpeak, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 TextButton(onClick = close) { Text(stringResource(if (sessionActive) R.string.history_return else R.string.history_new)) }
             }
             OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.history_search)) },
@@ -46,7 +46,7 @@ fun SessionHistoryScreen(history: SessionHistory, sessionActive: Boolean, initia
             LazyColumn(contentPadding = PaddingValues(16.dp)) {
                 if (history.savedSessions.isEmpty()) item { Text(stringResource(R.string.history_empty), color = TextSecondary) }
                 items(history.savedSessions.filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }, key = { it.id }) { saved ->
-                    Column(Modifier.fillMaxWidth().clickable { selected = saved.id }.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.fillMaxWidth().clickable { selected = saved.id }.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(saved.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                         Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(saved.startedAt)) + " · " + saved.durationText, fontSize = 12.sp)
                         Text(saved.turns.map { it.targetLanguage.uppercase() }.distinct().joinToString(" · "), fontSize = 12.sp)
@@ -92,8 +92,8 @@ private fun summaryStatusResource(status: SummaryStatus) = when (status) {
             }
         }
     }
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(session.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(session.title, fontFamily = BouyguesSpeak, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)) + " · " + session.durationText, fontSize = 12.sp)
         Text(stringResource(R.string.history_turn_count, session.turns.size), fontSize = 12.sp, color = TextSecondary)
     }
@@ -112,7 +112,7 @@ private fun summaryStatusResource(status: SummaryStatus) = when (status) {
                     end = if (turn.speaker == "A") 16.dp else 0.dp)
                     .clip(MessageShape).background(if (turn.speaker == "A") TintA else TintB)
                     .border(if (focus == turn.id) 2.dp else 0.dp, if (focus == turn.id) AccentB else DividerLine, MessageShape)
-                    .padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    .padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${turn.speaker} · ${turn.targetLanguage.uppercase()} · ${index + 1}", fontSize = 11.sp, color = TextSecondary)
                     if (turn.translation != null) Text(turn.translation, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
                     else Text(stringResource(R.string.history_translation_unavailable), fontSize = 12.sp)
@@ -151,8 +151,9 @@ private fun summaryStatusResource(status: SummaryStatus) = when (status) {
                     item { CircularProgressIndicator(); TextButton(onClick = history::interrupt) { Text(stringResource(R.string.history_stop_summary)) } }
                 } else {
                     item {
-                        Button(onClick = { if (consent) generate(session.id) else consentPrompt = true }, enabled = !sessionActive && !state.storageFailed) {
-                            Text(stringResource(if (session.summaryStatus == SummaryStatus.failed) R.string.history_retry else R.string.history_generate))
+                        Button(onClick = { if (consent) generate(session.id) else consentPrompt = true }, enabled = !sessionActive && !state.storageFailed,
+                            shape = ControlShape, modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight)) {
+                            Text(stringResource(if (session.summaryStatus == SummaryStatus.failed) R.string.history_retry else R.string.history_generate), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                         if (sessionActive) Text(stringResource(R.string.history_end_first), fontSize = 12.sp)
                     }

@@ -198,7 +198,7 @@ fun RealtimeTranslateApp(
         IconButton(onClick = onOpenSettingsDrawer, modifier = Modifier.align(Alignment.CenterStart)) {
             Icon(painterResource(R.drawable.ic_menu), stringResource(R.string.history_menu), tint = TextPrimary)
         }
-        Text(FirstRunCopy.PRODUCT_NAME, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+        Text(FirstRunCopy.PRODUCT_NAME, fontFamily = BouyguesSpeak, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
             modifier = Modifier.align(Alignment.Center))
         if (state.conversationStarted) TextButton(onClick = { onAction(UiAction.EndSession) },
             enabled = state.activeSpeaker() == null, modifier = Modifier.align(Alignment.CenterEnd)) {
@@ -206,7 +206,7 @@ fun RealtimeTranslateApp(
         }
     }
     if (state.activeSpeaker() != null) Text(statusLabel(state).text(), fontSize = 11.sp, color = TextSecondary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     HorizontalDivider(color = DividerLine)
 }
 
@@ -230,7 +230,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     onOpenVoiceInputSettings: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -269,7 +269,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             shape = ControlShape,
             border = BorderStroke(1.dp, if (enabled) speakerBorder(speaker) else DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             modifier = Modifier.semantics { contentDescription = chipAccessibility },
         ) {
             Text(
@@ -517,8 +517,8 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
         shape = ControlShape,
         border = BorderStroke(1.dp, DividerLine),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = description },
-    ) { Text(label, fontSize = 14.sp) }
+        modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = description },
+    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
 }
 
 @Composable private fun ConversationList(
@@ -687,9 +687,9 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     onLongClick = { menuExpanded = true },
                     onLongClickLabel = copyAction,
                 )
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(16.dp)
                 .semantics { contentDescription = bubbleAccessibility },
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
@@ -888,16 +888,16 @@ private fun bottomHint(state: SessionUiState): UiText {
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = cancelLabel },
-        ) { Text(cancelLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = cancelLabel },
+        ) { Text(cancelLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     } else if (state.conversationStarted) {
         OutlinedButton(
             onClick = { onAction(UiAction.EndSession) },
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = endLabel },
-        ) { Text(endLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = endLabel },
+        ) { Text(endLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     } else {
         Button(
             onClick = { onAction(UiAction.StartConversation) },
@@ -909,8 +909,8 @@ private fun bottomHint(state: SessionUiState): UiText {
                 disabledContainerColor = SurfaceSubtle,
                 disabledContentColor = TextSecondary,
             ),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = startLabel },
-        ) { Text(startLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = startLabel },
+        ) { Text(startLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
@@ -936,10 +936,10 @@ private data class TypedInputDraft(
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.typed_input_title), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.typed_input_title), fontFamily = BouyguesSpeak, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(stringResource(R.string.typed_input_speaker), color = TextSecondary, fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Speaker.entries.forEach { speaker ->

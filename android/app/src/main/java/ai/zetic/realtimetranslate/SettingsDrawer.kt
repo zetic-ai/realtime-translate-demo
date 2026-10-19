@@ -267,10 +267,10 @@ private fun SettingsRow(
                 role = Role.Button
                 if (!enabled) disabled()
             }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, color = if (enabled) TextPrimary else TextSecondary, fontSize = 16.sp)
             subtitle?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
         }

@@ -2,7 +2,7 @@
 
 Relais is a native iOS and Android app for two people to translate a conversation on one phone. Tap A or B to speak, then tap again to stop, or type a turn. Platform on-device speech recognition produces the original transcript and Melange runs `SJ_zetic/Hy-MT2-1.8B` for translation. There is no network STT fallback or automatic speaker separation.
 
-The interface uses Bouygues Telecom Trilogy colors, compact language controls, and wide A/B chat bubbles. The **translation appears first in bold**, with the smaller original transcript always visible below. System fonts support platform text scaling. Replay remains an explicit action.
+The interface uses Bouygues Telecom Trilogy colors, compact language controls, and wide A/B chat bubbles. The **translation appears first in bold**, with the smaller original transcript always visible below. Bouygues Speak headings and Bouygues Read body text retain native text scaling. Replay remains an explicit action.
 
 ## Saved sessions and summaries
 
@@ -20,6 +20,7 @@ Long sessions are split into bounded Unicode-safe excerpts, with every original 
 
 - [iOS build instructions](ios/README.md): SwiftUI, Xcode/XcodeGen. Retains the existing pinned internal SDK because its local archive/GGUF loading APIs are required by the app.
 - [Android build instructions](android/README.md): Kotlin, Compose, JDK 17, Android SDK 35. Uses Melange SDK 1.11.0 from its public GitHub release repository.
+- [Brand asset notices](THIRD_PARTY_NOTICES.md)
 - [Relais design and session contract](docs/relais.md)
 - [Translation prompt/model reference](docs/hy-mt2-integration-reference.md)
 

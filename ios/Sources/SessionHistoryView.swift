@@ -18,14 +18,14 @@ struct SessionHistoryView: View {
         if history.savedSessions.isEmpty { Text("history.empty").foregroundStyle(DesignToken.textSecondary) }
         ForEach(history.savedSessions.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }) { session in
           NavigationLink(value: session.id) {
-            VStack(alignment: .leading, spacing: 6) {
-              Text(verbatim: session.title).font(.headline).lineLimit(2)
-              HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(.caption)
+            VStack(alignment: .leading, spacing: 8) {
+              Text(verbatim: session.title).font(TrilogyFont.text(.headline)).lineLimit(2)
+              HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
               HStack {
                 Text(verbatim: session.turns.map(\.targetLanguage).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: " · ").uppercased())
                 Spacer()
                 Text(summaryStatusKey(session.summaryStatus))
-              }.font(.caption).foregroundStyle(DesignToken.textSecondary)
+              }.font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             }.padding(.vertical, 4)
           }
         }
@@ -35,10 +35,16 @@ struct SessionHistoryView: View {
       .scrollContentBackground(.hidden)
       .searchable(text: $query, prompt: Text("history.search"))
       .navigationTitle(Text("history.title"))
-      .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
-        Button(LocalizedStringKey(viewModel.isSessionLive ? "history.return" : "history.new")) { dismiss() }
-      } }
-    }.tint(DesignToken.accent).foregroundStyle(DesignToken.textPrimary)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Text("history.title").font(TrilogyFont.text(.title3)).foregroundStyle(DesignToken.textPrimary)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button(LocalizedStringKey(viewModel.isSessionLive ? "history.return" : "history.new")) { dismiss() }
+        }
+      }
+    }.tint(DesignToken.accent).foregroundStyle(DesignToken.textPrimary).font(TrilogyFont.text(.body))
   }
 }
 
@@ -63,29 +69,29 @@ struct SavedSessionView: View {
   @State private var renaming = false
   @State private var deleting = false
   @State private var title = ""
-  @ScaledMetric(relativeTo: .body) private var translationSize = 16.0
-  @ScaledMetric(relativeTo: .caption) private var originalSize = 13.0
   private var session: SavedSession? { history.sessions.first { $0.id == id } }
 
   var body: some View {
     Group {
       if let session {
         VStack(alignment: .leading, spacing: 12) {
-          VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: session.title).font(.title3.bold())
-            HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(.caption)
-            Text("history.turnCount \(session.turns.count)").font(.caption).foregroundStyle(DesignToken.textSecondary)
+          VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: session.title).font(TrilogyFont.text(.title3, emphasized: true))
+            HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
+            Text("history.turnCount \(session.turns.count)").font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
           }.padding(.horizontal, 16)
-          Picker("history.content", selection: $tab) {
-            Text("history.summary").tag(0); Text("history.transcript").tag(1)
-          }.pickerStyle(.segmented).padding(.horizontal, 16)
+          TrilogySessionTabs(selection: $tab).padding(.horizontal, 16)
           if tab == 0 { summaryContent(session) } else { transcript(session) }
         }
       } else { Text("history.empty") }
     }
     .navigationTitle(Text("history.session"))
     .navigationBarTitleDisplayMode(.inline)
-    .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Text("history.session").font(TrilogyFont.text(.title3)).foregroundStyle(DesignToken.textPrimary)
+      }
+      ToolbarItem(placement: .navigationBarTrailing) {
       Menu {
         Button("history.rename") { title = session?.title ?? ""; renaming = true }
         Button("history.delete", role: .destructive) { deleting = true }
@@ -114,8 +120,8 @@ struct SavedSessionView: View {
 
   private func summaryContent(_ session: SavedSession) -> some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("history.aiNotice").font(.caption).foregroundStyle(DesignToken.textSecondary)
+      VStack(alignment: .leading, spacing: 24) {
+        Text("history.aiNotice").font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
         if session.summaryStatus == .ready, let summary = session.summary {
           section("history.essentials", summary.essentials, session)
           section("history.decisions", summary.decisions, session)
@@ -124,15 +130,15 @@ struct SavedSessionView: View {
         } else if session.summaryStatus == .generating {
           ProgressView(value: history.progress)
           Text("history.generating")
-          Text("history.transcriptSafe").font(.subheadline)
+          Text("history.transcriptSafe").font(TrilogyFont.text(.subheadline))
           Button("history.stopSummary", action: history.interrupt)
         } else {
-          Text(LocalizedStringKey(session.summaryStatus == .failed ? "history.summaryFailed" : "history.summaryPending")).font(.headline)
-          Text("history.transcriptSafe").font(.subheadline)
+          Text(LocalizedStringKey(session.summaryStatus == .failed ? "history.summaryFailed" : "history.summaryPending")).font(TrilogyFont.text(.headline))
+          Text("history.transcriptSafe").font(TrilogyFont.text(.subheadline))
           Button(LocalizedStringKey(session.summaryStatus == .failed ? "history.retry" : "history.generate"), action: generate)
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TrilogyActionStyle())
             .disabled(viewModel.isSessionLive || viewModel.canCancelModelPreparation || history.storageFailed)
-          if viewModel.isSessionLive { Text("history.endFirst").font(.caption) }
+          if viewModel.isSessionLive { Text("history.endFirst").font(TrilogyFont.text(.caption)) }
         }
         Button("history.readTranscript") { tab = 1 }
         if history.storageFailed { Text("history.storageError").foregroundStyle(DesignToken.error) }
@@ -142,17 +148,17 @@ struct SavedSessionView: View {
 
   private func section(_ title: LocalizedStringKey, _ points: [SummaryPoint], _ session: SavedSession) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text(title).font(.headline)
-      if points.isEmpty { Text("history.noneStated").font(.subheadline).foregroundStyle(DesignToken.textSecondary) }
+      Text(title).font(TrilogyFont.text(.headline))
+      if points.isEmpty { Text("history.noneStated").font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textSecondary) }
       ForEach(Array(points.enumerated()), id: \.offset) { _, point in
-        VStack(alignment: .leading, spacing: 2) {
-          Text(verbatim: point.text).font(.body)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(verbatim: point.text).font(TrilogyFont.text(.body))
           // Each reference is a full touch target even when its visible number is small.
           HStack(spacing: 4) {
             ForEach(Array(Set(point.sources)).sorted(), id: \.self) { source in
               Button { focus = source; tab = 1 } label: {
                 Text(verbatim: "[\((session.turns.firstIndex { $0.id == source } ?? 0) + 1)]")
-                  .font(.caption.bold()).frame(minWidth: 44, minHeight: 44)
+                  .font(TrilogyFont.text(.caption, emphasized: true)).frame(minWidth: 44, minHeight: 44)
               }.accessibilityLabel(Text("history.source \((session.turns.firstIndex { $0.id == source } ?? 0) + 1)"))
             }
           }
@@ -166,17 +172,17 @@ struct SavedSessionView: View {
       ScrollView {
         LazyVStack(spacing: 8) {
           ForEach(Array(session.turns.enumerated()), id: \.element.id) { index, turn in
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
               Text(verbatim: "\(turn.speaker) · \(turn.targetLanguage.uppercased()) · \(index + 1)")
-                .font(.caption).foregroundStyle(DesignToken.textSecondary)
-              if let translation = turn.translation { Text(verbatim: translation).font(.system(size: translationSize, weight: .bold)) }
-              else { Text("history.translationUnavailable").font(.caption) }
+                .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
+              if let translation = turn.translation { Text(verbatim: translation).font(TrilogyFont.translation) }
+              else { Text("history.translationUnavailable").font(TrilogyFont.text(.caption)) }
               Divider()
-              Text(verbatim: turn.original).font(.system(size: originalSize)).textSelection(.enabled)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+              Text(verbatim: turn.original).font(TrilogyFont.original).textSelection(.enabled)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
               .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
-              .clipShape(RoundedRectangle(cornerRadius: 12))
-              .overlay(RoundedRectangle(cornerRadius: 12).stroke(focus == turn.id ? DesignToken.accentB : .clear, lineWidth: 2))
+              .clipShape(RoundedRectangle(cornerRadius: Layout.message))
+              .overlay(RoundedRectangle(cornerRadius: Layout.message).stroke(focus == turn.id ? DesignToken.accentB : .clear, lineWidth: 2))
               .padding(turn.speaker == "A" ? .trailing : .leading, 16).id(turn.id)
           }
         }.padding(8)
@@ -190,7 +196,7 @@ struct HistoryStorageNotice: View {
   var body: some View {
     if history.storageFailed {
       VStack {
-        Text("history.storageError").font(.footnote)
+        Text("history.storageError").font(TrilogyFont.text(.footnote))
         Button("history.retry", action: history.retryStorage)
       }.padding().background(DesignToken.surface).foregroundStyle(DesignToken.error)
     }

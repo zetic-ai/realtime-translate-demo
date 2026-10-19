@@ -34,6 +34,12 @@
     <string>Microphone access is required to listen and translate conversations in real time.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Speech recognition is required to transcribe conversations on this device.</string>
+    <key>UIAppFonts</key>
+    <array>
+        <string>bouygues-speak.ttf</string>
+        <string>bouygues-read-regular.ttf</string>
+        <string>bouygues-read-medium.ttf</string>
+    </array>
     <key>UIUserInterfaceStyle</key>
     <string>Light</string>
     <key>UIApplicationSceneManifest</key>

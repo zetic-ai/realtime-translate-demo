@@ -2,9 +2,9 @@
 
 ## Mobile layout
 
-The approved design keeps the conversation as the main surface. Header: menu, Relais, visible End action. Language choices remain compact and lock during an active turn. Bubbles use 8-point outer spacing, a 16-point opposite gutter, 12-point radius, 16-point bold translation above a divider and 13-point original text below. Neither text is collapsed. Touch targets remain native minimum sizes; typography follows system scaling. The A/B controls remain tap-to-start/tap-to-stop.
+The approved design keeps the conversation as the main surface. Header: menu, Relais, visible End action. Language choices remain compact and lock during an active turn. Bubbles use 8-point outer spacing, a 16-point opposite gutter, 16-point radius and 16-point internal padding, 16-point bold translation above a divider and 13-point original text below. Neither text is collapsed. Touch targets remain native minimum sizes; typography follows system scaling. The A/B controls remain tap-to-start/tap-to-stop.
 
-The palette derives from [Bouygues Telecom Trilogy](https://design.bouyguestelecom.fr/foundations/colors): main `#25465F`, main fade `#EFF2F8`, accent `#CC4E0A`, grey `#BBC6CD`, grey fade `#E9EFF4`, error `#D42D02`, and white. A/B placement and letters supplement color. No client-specific identity or palette appears in the interface. Relais uses native fonts, not proprietary brand fonts.
+The palette derives from [Bouygues Telecom Trilogy](https://design.bouyguestelecom.fr/foundations/colors): main `#25465F`, main fade `#EFF2F8`, accent `#CC4E0A`, grey `#BBC6CD`, grey fade `#E9EFF4`, error `#D42D02`, and white. A/B placement and letters supplement color. Bouygues Speak is used for headings and the wordmark; Bouygues Read Regular/Medium for body and emphasis. The same font files ship on both platforms, with native scaling and system fallback for glyphs outside their coverage. Controls use an 8-point radius and full-width actions are at least 48 points tall. App spacing uses 8-point steps with 4-point increments for compact elements. These are native adaptations, not the web component library; platform icons, sheets and system alerts remain native.
 
 ## History
 
@@ -27,3 +27,10 @@ At process restart, unfinished sessions remain readable in History. Interrupted 
 ## Validation boundary
 
 Unit tests cover persistence, interrupted-session recovery, write failures, UTF-8 chunk completeness, output schema and citation rejection, and the existing speech/translation lifecycle. Native builds validate SDK integration. Physical-device model quality, memory and airplane-mode acceptance require configured model credentials and supported test phones; a simulator/unit suite is not evidence for those properties.
+
+## Design references and scope
+
+- [Typography](https://design.bouyguestelecom.fr/foundations/typography): Speak / Read families.
+- [Spacing](https://design.bouyguestelecom.fr/foundations/spacings): 8-point grid, 4-point compact increments.
+- [Buttons](https://design.bouyguestelecom.fr/components/Button): navy functional primary actions; outlined complementary actions. Orange remains the redundant Speaker B identifier, not a purchase/conversion call to action.
+- Saved-session selection uses a navy selected segment on iOS; Android keeps its native tabs with the same palette and typography. Review, speech, history and summary behavior are unchanged by this visual refinement.

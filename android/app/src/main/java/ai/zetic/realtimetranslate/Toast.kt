@@ -82,7 +82,7 @@ fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
                 .padding(16.dp)
                 .clip(ControlShape)
                 .background(TextPrimary)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .semantics { liveRegion = LiveRegionMode.Assertive },
         )
     }

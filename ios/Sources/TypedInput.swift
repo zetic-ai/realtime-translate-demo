@@ -120,7 +120,7 @@ struct TypedInputSheet: View {
           TypedInputCopy.guidance(speaker: model.speaker, typing: typingLanguage,
                                   translatedTo: counterpartLanguage)
         )
-        .font(.caption)
+        .font(TrilogyFont.text(.caption))
         .foregroundStyle(DesignToken.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("typed-input-guidance")
@@ -128,7 +128,7 @@ struct TypedInputSheet: View {
         TextField(TypedInputCopy.placeholder(for: typingLanguage), text: $model.text,
                   axis: .vertical)
           .lineLimit(3 ... 6)
-          .font(.body)
+          .font(TrilogyFont.text(.body))
           .foregroundStyle(DesignToken.textPrimary)
           .textInputAutocapitalization(.sentences)
           .padding(12)
@@ -141,7 +141,7 @@ struct TypedInputSheet: View {
 
         if !canSend {
           Text(TypedInputCopy.blockedHint)
-            .font(.caption)
+            .font(TrilogyFont.text(.caption))
             .foregroundStyle(DesignToken.textSecondary)
             .accessibilityIdentifier("typed-input-blocked")
         }

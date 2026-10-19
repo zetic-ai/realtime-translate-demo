@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Relais uses Bouygues Telecom Trilogy colors with native system typography.
+/// Bouygues Telecom Trilogy semantic colors; fonts and controls live in TrilogyDesign.
 enum DesignToken {
   static let accent = Color(red: 37/255, green: 70/255, blue: 95/255)
   static let surface = Color.white
@@ -32,8 +32,9 @@ enum SettingsMenuGlyph {
 }
 
 enum Layout {
-  static let message: CGFloat = 12
-  static let control: CGFloat = 12
+  static let message: CGFloat = 16
+  static let control: CGFloat = 8
+  static let actionHeight: CGFloat = 48
   /// The minimum edge of anything that can be tapped. Every icon-only control in this app was
   /// drawn to its glyph (36x28, 32x32, 28x24) rather than to a finger, which is under the
   /// platform's own floor in both directions at once.
@@ -287,7 +288,7 @@ struct RealtimeTranslateRootView: View {
       // End stays in the header so the bottom controls leave more room for the transcript.
       .toolbar {
         ToolbarItem(placement: .principal) {
-          Text(verbatim: "Relais").font(.system(size: 19, weight: .bold)).foregroundStyle(DesignToken.accent)
+          Text(verbatim: "Relais").font(TrilogyFont.wordmark).foregroundStyle(DesignToken.accent)
         }
         if #available(iOS 26.0, *) {
           ToolbarItem(placement: .navigationBarLeading) { headerMenu }.sharedBackgroundVisibility(.hidden)
@@ -351,13 +352,13 @@ struct Toast: View {
     ZStack {
       if let message {
         Text(message)
-          .font(.caption)
+          .font(TrilogyFont.text(.caption))
           .foregroundStyle(DesignToken.surface)
           // Wraps rather than running past the phone at the accessibility sizes.
           .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
           .padding(.horizontal, 16)
-          .padding(.vertical, 10)
+          .padding(.vertical, 12)
           .background(DesignToken.textPrimary)
           .clipShape(RoundedRectangle(cornerRadius: Layout.control))
           .padding(.horizontal, 24)
@@ -387,7 +388,7 @@ private struct StatusStrip: View {
   var body: some View {
     HStack(spacing: 8) {
       Text(title)
-        .font(.caption)
+        .font(TrilogyFont.text(.caption))
         .foregroundStyle(DesignToken.textSecondary)
         // Wraps at the accessibility sizes: "Translation model unavailable" truncated to
         // "Translation model" is a status line that says the opposite of what it means. Two lines
@@ -456,7 +457,7 @@ private struct LanguageBar: View {
           + Text(verbatim: " \(target.wrappedValue.menuName)").fontWeight(.medium)
             .foregroundColor(DesignToken.textPrimary)
       )
-      .font(.caption)
+      .font(TrilogyFont.text(.caption))
       // Two chips share one row, so the reading language is the first thing to lose at the
       // accessibility sizes. A second line and a little shrink keep the whole name readable
       // without letting a name like "Traditional Chinese" turn the language bar into four rows.
@@ -493,13 +494,13 @@ private struct SessionBanner: View {
         HStack(spacing: 8) {
           ProgressView().progressViewStyle(.circular).tint(DesignToken.accent)
           Text(backgroundDownload.phase.title)
-            .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+            .font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("background-model-download-headline")
         }
         if let detail = backgroundDownload.phase.detail {
           Text(detail)
-            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("background-model-download-detail")
         }
@@ -513,7 +514,7 @@ private struct SessionBanner: View {
       banner {
         Text("Relais needs microphone and speech recognition access on this device.",
              comment: "Session banner body text. Relais is the product name, keep it as is")
-          .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+          .font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
         // `BannerButton` takes a plain `String`, so each title is looked up here rather than
         // handed over as a literal that would never reach the catalog.
@@ -530,13 +531,13 @@ private struct SessionBanner: View {
             ProgressView().progressViewStyle(.circular).tint(DesignToken.accent)
           }
           Text(status.headline)
-            .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+            .font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("model-preparation-headline")
         }
         if let detail = status.detail {
           Text(detail)
-            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             .accessibilityIdentifier("model-preparation-detail")
         }
         if let value = status.progress {
@@ -548,7 +549,7 @@ private struct SessionBanner: View {
     case let .modelLoadFailed(reason):
       banner {
         // The reason is already localized: it comes through `TranslationFailureCopy`.
-        Text(verbatim: reason).font(.subheadline).foregroundStyle(DesignToken.error)
+        Text(verbatim: reason).font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
         BannerButton(
           title: String(localized: "Retry model load",
@@ -559,7 +560,7 @@ private struct SessionBanner: View {
       }
     case let .error(failure):
       banner {
-        Text(verbatim: failure.message).font(.subheadline).foregroundStyle(DesignToken.error)
+        Text(verbatim: failure.message).font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
         // What the way out actually is. A refused permission goes back to the system prompts and
         // has to say so; anything else is one button that puts the session back, without throwing
@@ -580,7 +581,7 @@ private struct SessionBanner: View {
       if let notice = viewModel.notice {
         banner {
           Text(verbatim: notice)
-            .font(.subheadline).foregroundStyle(DesignToken.textSecondary)
+            .font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("session-notice")
         }
@@ -607,20 +608,9 @@ private struct BannerButton: View {
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
-      // The caller localizes; this is a `String`, so `verbatim` says so rather than leaving the
-      // overload to look like an oversight.
-      Text(verbatim: title)
-        .font(.footnote).fontWeight(.semibold)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(DesignToken.textPrimary)
-    .background(DesignToken.surface)
-    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-    .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
-    .accessibilityLabel(title)
+    Button(action: action) { Text(verbatim: title) }
+      .buttonStyle(TrilogyActionStyle(primary: false))
+      .accessibilityLabel(title)
   }
 }
 
@@ -661,7 +651,7 @@ private struct ConversationList: View {
             LazyVStack(alignment: .leading, spacing: 8) {
               if items.isEmpty, let emptyHint {
                 Text(emptyHint)
-                  .font(.subheadline)
+                  .font(TrilogyFont.text(.subheadline))
                   .foregroundStyle(DesignToken.textSecondary)
                   .fixedSize(horizontal: false, vertical: true)
                   .frame(maxWidth: .infinity, alignment: .leading)
@@ -796,27 +786,25 @@ private struct ConversationBubble: View {
   /// translated bubble carries it: it is the only way this app makes a sound.
   private var showsReplayControl: Bool { item.speakableTranslation != nil }
 
-  @ScaledMetric(relativeTo: .body) private var translationSize = 16.0
-  @ScaledMetric(relativeTo: .caption) private var originalSize = 13.0
   var body: some View {
     HStack(spacing: 0) {
       if !isA { Spacer(minLength: 16) }
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: 8) {
         HStack {
           Text(verbatim: "\(item.speaker.rawValue) · \(item.targetLanguage.code.uppercased())")
-            .font(.caption2.bold()).foregroundStyle(item.speaker.deepColor)
+            .font(TrilogyFont.text(.caption2, emphasized: true)).foregroundStyle(item.speaker.deepColor)
             .accessibilityLabel(Text("Speaker \(item.speaker.rawValue)") + Text(verbatim: " · \(item.targetLanguage.code.uppercased())"))
-          Text("history.translation").font(.caption2).foregroundStyle(DesignToken.textSecondary)
+          Text("history.translation").font(TrilogyFont.text(.caption2)).foregroundStyle(DesignToken.textSecondary)
           Spacer(minLength: 0)
         }
         deliveryLine
         ThinDivider()
-        Text("history.original").font(.caption2).foregroundStyle(DesignToken.textSecondary)
+        Text("history.original").font(TrilogyFont.text(.caption2)).foregroundStyle(DesignToken.textSecondary)
         Text(verbatim: item.transcript)
-          .font(.system(size: originalSize)).foregroundStyle(DesignToken.textPrimary)
+          .font(TrilogyFont.original).foregroundStyle(DesignToken.textPrimary)
           .padding(.trailing, showsReplayControl ? 36 : 0)
       }
-      .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 8)
+      .frame(maxWidth: .infinity, alignment: .leading).padding(16)
       .background(item.speaker.tintColor).clipShape(RoundedRectangle(cornerRadius: Layout.message))
       .contentShape(RoundedRectangle(cornerRadius: Layout.message))
       .contextMenu {
@@ -836,27 +824,27 @@ private struct ConversationBubble: View {
     switch item.state {
     case .partial:
       Text("Recognizing speech", comment: "Chat bubble state while speech is still being recognized")
-        .font(.caption).foregroundStyle(DesignToken.textSecondary)
+        .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
       provisionalLine
     case .finalizing:
       Text("Translation pending", comment: "Chat bubble state while a translation is in flight")
-        .font(.caption).foregroundStyle(DesignToken.textSecondary)
+        .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
       provisionalLine
     case .translated:
       Text(verbatim: item.translation ?? "")
-        .font(.system(size: translationSize, weight: .bold)).foregroundStyle(DesignToken.textPrimary)
+        .font(TrilogyFont.translation).foregroundStyle(DesignToken.textPrimary)
         // Keeps the last line of a long translation clear of the replay glyph in the corner.
 
     case let .translationFailed(reason):
       // Already localized where it was built, by `TranslationFailureCopy` at the display site.
       // A failed turn is the one thing on this screen that used to be a dead end: the words were
       // said, the transcript is right there, and nothing anywhere offered to send it again.
-      VStack(alignment: .leading, spacing: 6) {
-        Text(verbatim: reason).font(.caption).foregroundStyle(DesignToken.error)
+      VStack(alignment: .leading, spacing: 8) {
+        Text(verbatim: reason).font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
         Button(action: retry) {
           Text(verbatim: TranslationFailureCopy.retryAction)
-            .font(.caption).fontWeight(.semibold)
+            .font(TrilogyFont.text(.caption)).fontWeight(.semibold)
             .padding(.horizontal, 12)
             .frame(minHeight: Layout.tapTarget)
         }
@@ -885,7 +873,7 @@ private struct ConversationBubble: View {
   @ViewBuilder private var provisionalLine: some View {
     if let provisional = item.provisionalTranslation {
       Text(verbatim: provisional)
-        .font(.body).foregroundStyle(DesignToken.textSecondary)
+        .font(TrilogyFont.text(.body)).foregroundStyle(DesignToken.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("provisional-translation")
     }
@@ -945,7 +933,7 @@ private struct BottomBar: View {
       HStack(spacing: 8) {
         if showsHint {
           Text(hint)
-            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
@@ -1005,13 +993,8 @@ private struct BottomBar: View {
     } else if !viewModel.isSessionLive {
       Button(action: startSession) {
         Text(verbatim: SessionActionCopy.start)
-          .font(.footnote).fontWeight(.semibold)
-          .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
       }
-      .buttonStyle(.plain)
-      .foregroundStyle(viewModel.canStartSession ? DesignToken.surface : DesignToken.textSecondary)
-      .background(viewModel.canStartSession ? DesignToken.accent : DesignToken.surfaceSubtle)
-      .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+      .buttonStyle(TrilogyActionStyle())
       .disabled(!viewModel.canStartSession)
       .accessibilityIdentifier("start-session")
       .accessibilityLabel(SessionActionCopy.start)
@@ -1022,14 +1005,8 @@ private struct BottomBar: View {
                               action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Text(verbatim: title)
-        .font(.footnote).fontWeight(.semibold)
-        .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
     }
-    .buttonStyle(.plain)
-    .foregroundStyle(DesignToken.textPrimary)
-    .background(DesignToken.surface)
-    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-    .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
+    .buttonStyle(TrilogyActionStyle(primary: false))
     .accessibilityIdentifier(identifier)
     .accessibilityLabel(title)
   }
@@ -1094,14 +1071,14 @@ private struct PTTButton: View {
   var body: some View {
     Button(action: { isListening ? end(speaker) : begin(speaker) }, label: {
       label
-        .font(.footnote)
+        .font(TrilogyFont.text(.footnote))
         .multilineTextAlignment(.center)
         // Wraps to as many lines as it needs instead of truncating. Without it, the two controls
         // this app is built around read "A - hol..." and "B - hol..." at the accessibility sizes:
         // an ellipsis where the instruction should be, on the only two buttons that matter.
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
-        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, minHeight: Layout.actionHeight)
+        .padding(.vertical, 4)
         .padding(.horizontal, 4)
     })
     .buttonStyle(.plain)
