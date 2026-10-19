@@ -6,9 +6,11 @@ Stacked on PR #4 (`codex/relais-sessions`). This diff refines iOS and Android st
 | --- | --- |
 | ![Before](design/conversation-before.png) | ![After](design/conversation-after.png) |
 
-Both captures use the same illustrative Hello / Bonjour fixture. The previous capture has English UI text; the new capture uses French. Neither exercises model inference.
+The previous capture is the minimal Hello / Bonjour fixture with English UI text. Updated French captures show two complete English/French exchanges (four alternating A/B turns) about a site visit and preparing a report and valve photos. All dialogue is illustrative fixture text; no model inference is exercised.
 
-![Saved session with navy selected segment and primary action](design/session-after.png)
+![Saved session with four turns and navy selected segment](design/session-after.png)
+
+![All four saved transcript turns](design/transcript-after.png)
 
 ## Native adaptation
 
@@ -26,3 +28,9 @@ Both captures use the same illustrative Hello / Bonjour fixture. The previous ca
 - `git diff --check` passed.
 
 Actual summary output quality, peak memory, offline acceptance and physical-device inference remain unverified. The summary preview is only an interface state, not model validation. The existing internal iOS SDK deployment-target linker warning remains.
+
+## Reproduce the representative captures
+
+In a Debug simulator build, launch with `-uiState designConversation -firstRun returning -AppleLanguages '(fr)' -AppleLocale fr_FR`. This seeds four turns and consistent English/French language controls using ephemeral preferences. The new preview state and dialogue are excluded from Release. End → Save produces the matching four-turn saved session; no summary model is run. The existing single-turn UI test fixture stays unchanged.
+
+The four-turn Debug build passed and all four translated/original turns were visually checked in the conversation and saved transcript. The main conversation and saved-session/transcript screenshots were replaced together.
