@@ -96,7 +96,7 @@ struct PermissionPrimingView: View {
 
 // MARK: - Model download consent
 
-/// Consent for the translation-model download. Shown only when no complete
+/// Consent for the translation-model download. Summary assets have separate consent. Shown only when no complete
 /// local model exists, so a returning user goes straight into a local load.
 struct ModelConsentOverlay: View {
   let prompt: FirstRunModel.ConsentPrompt?

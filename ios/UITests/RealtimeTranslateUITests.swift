@@ -96,9 +96,9 @@ final class RealtimeTranslateUITests: XCTestCase {
     if let translation, let original { XCTAssertLessThan(translation.lowerBound, original.lowerBound) }
     app.buttons["end-session"].tap()
     app.buttons["End and save"].tap()
-    XCTAssertTrue(app.staticTexts["Transcript"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.buttons["Prepare summary"].exists)
-    XCTAssertFalse(app.buttons["AI summary"].exists)
+    XCTAssertTrue(app.buttons["Transcript"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Prepare summary"].exists)
+    app.buttons["Transcript"].tap()
     XCTAssertTrue(app.staticTexts["Hello."].firstMatch.waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Bonjour."].firstMatch.exists)
   }

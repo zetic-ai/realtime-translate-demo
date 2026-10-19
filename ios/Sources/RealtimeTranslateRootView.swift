@@ -121,6 +121,7 @@ struct RealtimeTranslateRootView: View {
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
       .onChange(of: scenePhase) { phase in
         updateScreenAwake()
+        if phase != .active { viewModel.history.interrupt() }
       }
       .sheet(isPresented: $showsHistory) {
         SessionHistoryView(history: viewModel.history, viewModel: viewModel, initialID: savedID)
