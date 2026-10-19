@@ -9,8 +9,8 @@ gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 gradle :app:connectedDebugAndroidTest  # requires an emulator or phone
 ```
 
-The SDK is pinned to `com.zeticai.mlange:mlange:1.11.0`, resolved from the public GitHub release repository in `settings.gradle.kts`. No GitHub Packages credentials are required. The old internal package is unavailable with the current build credentials. App ID and microphone permissions are unchanged.
+The SDK is pinned to `com.zeticai.mlange:mlange:1.11.0`, resolved from the public GitHub release Ivy repository in `settings.gradle.kts`. No GitHub Packages credentials are required. App ID and microphone permissions are unchanged. Summary model acquisition has a separate in-app consent gate.
 
-`SessionViewModel` owns the speech/translation lifecycle and checkpoints finalized turns in `SessionHistory`. `SessionHistory.kt` holds atomic persistence and recovery. `SessionHistoryScreen.kt` renders history and session details. `RealtimeTranslateApp.kt` renders the conversation; `TurnTranslateRoot.kt` wraps menu, first-run flows and confirmations. `RealtimeTranslateTheme.kt` supplies the Bouygues palette.
+`SessionViewModel` owns the speech/translation lifecycle and coordinates model handoff with `SessionHistory`. `SessionHistory.kt` holds atomic persistence, recovery, summary orchestration and bounded input/output validation. `SessionHistoryScreen.kt` renders history and session details. `RealtimeTranslateApp.kt` renders the conversation; `TurnTranslateRoot.kt` wraps menu, first-run flows and confirmations. `RealtimeTranslateTheme.kt` supplies the Bouygues palette.
 
 See [Relais design and session contract](../docs/relais.md) for data behavior and model validation limits. Unit tests use injected runtime fakes; they do not measure actual model quality or device memory.

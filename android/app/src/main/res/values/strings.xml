@@ -168,9 +168,14 @@
     <string name="history_new">New session</string>
     <string name="history_empty">No saved sessions yet.</string>
     <string name="history_search">Search sessions</string>
+    <string name="history_summary_pending">Summary not generated</string>
+    <string name="history_summary_ready">Summary available</string>
+    <string name="history_summary_failed">Summary interrupted or unavailable</string>
+    <string name="history_generating">Preparing summary on this phone…</string>
     <string name="history_storage_error">Could not save or read history. Your current transcript is still here. Retry before ending.</string>
     <string name="history_retry">Retry</string>
     <string name="history_session">Session</string>
+    <string name="history_summary">AI summary</string>
     <string name="history_transcript">Transcript</string>
     <string name="history_content">Session content</string>
     <string name="history_options">Options</string>
@@ -179,7 +184,22 @@
     <string name="history_save">Save</string>
     <string name="history_cancel">Cancel</string>
     <string name="history_delete_question">Delete this session?</string>
-    <string name="history_delete_detail">This permanently deletes the transcript from this phone.</string>
+    <string name="history_delete_detail">This removes the transcript and summary from this phone. This cannot be undone.</string>
+    <string name="history_model_title">Enable on-device summaries</string>
+    <string name="history_model_detail">Relais needs a separate AI model. The first download is large and may use mobile data. After installation, transcripts are processed on this phone, with no cloud fallback. Keep Relais open while preparing a summary.</string>
+    <string name="history_download">Download and summarize</string>
+    <string name="history_later">Later</string>
+    <string name="history_ai_notice">AI summary · check against the transcript</string>
+    <string name="history_transcript_safe">Your transcript is saved and available below.</string>
+    <string name="history_stop_summary">Stop summary</string>
+    <string name="history_generate">Prepare summary</string>
+    <string name="history_end_first">End the current session before preparing a summary.</string>
+    <string name="history_read_transcript">Read transcript</string>
+    <string name="history_essentials">Key points</string>
+    <string name="history_decisions">Decisions</string>
+    <string name="history_actions">Actions to follow up</string>
+    <string name="history_questions">To confirm</string>
+    <string name="history_none_stated">None explicitly stated.</string>
     <string name="history_translation_unavailable">Translation unavailable</string>
     <string name="history_translation">Translation</string>
     <string name="history_original">Original</string>
@@ -188,6 +208,6 @@
     <string name="history_end_question">End this session?</string>
     <string name="history_end_save">End and save</string>
     <string name="history_continue">Continue session</string>
-    <string name="history_end_detail">The transcript will be saved in History.</string>
+    <string name="history_end_detail">The transcript will be saved in History. You can prepare an AI summary on this phone.</string>
     <string name="history_turn_count">%1$d turns</string>
 </resources>

@@ -55,13 +55,14 @@ struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
   @StateObject private var settings = SettingsDrawerModel()
   @StateObject private var firstRun: FirstRunModel
-  @StateObject private var modelDownload = TranslationModelDownloadCoordinator()
+  @StateObject private var modelDownload = TranslationModelDownloadCoordinator.fromLaunchArguments()
   @StateObject private var conversationCopy = ConversationCopyModel()
   @StateObject private var typedInput = TypedInputModel()
   @State private var showsHistory = false
   @State private var confirmsEnd = false
   @State private var savedID: String?
   @State private var startsWhenModelDownloadFinishes = false
+  @State private var isRemovingDownloadedModel = false
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
   /// The app-language override, as its raw value. `@AppStorage` cannot bind an enum without a
@@ -96,7 +97,7 @@ struct RealtimeTranslateRootView: View {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
                               clearConversation: viewModel.clearConversation,
                               canRemoveDownloadedModel: viewModel.canRemoveDownloadedModel
-                                && !modelDownload.isRemoving,
+                                && !isRemovingDownloadedModel && !modelDownload.isRemoving,
                               removeDownloadedModel: removeDownloadedModel,
                               appLanguage: AppLanguage.named(appLanguageRaw),
                               selectAppLanguage: selectAppLanguage)
@@ -109,7 +110,7 @@ struct RealtimeTranslateRootView: View {
       .environment(\.locale, localeOverride ?? .autoupdatingCurrent)
       .onAppear {
         viewModel.adoptExistingPermission()
-        modelDownload.resumeIfConsented(hasLocalModel: FirstRunModel.localModelExists())
+        modelDownload.resumeIfConsented()
         updateScreenAwake()
       }
       .onDisappear { screenAwake.release() }
@@ -121,6 +122,7 @@ struct RealtimeTranslateRootView: View {
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
       .onChange(of: scenePhase) { phase in
         updateScreenAwake()
+        if phase != .active { viewModel.history.interrupt() }
       }
       .sheet(isPresented: $showsHistory) {
         SessionHistoryView(history: viewModel.history, viewModel: viewModel, initialID: savedID)
@@ -184,7 +186,9 @@ struct RealtimeTranslateRootView: View {
   /// Every path that would load the model routes through the consent gate, including the retry
   /// after a failed load: that is exactly when a large transfer may be about to start again.
   private func startSession() {
+    guard !isRemovingDownloadedModel else { return }
     firstRun.requestSessionStart {
+      guard !isRemovingDownloadedModel else { return }
       // Keep the old missing-key failure in the session banner. The coordinator deliberately does
       // not create a background job without a key, so it cannot be the component that reports it.
       guard FirstRunModel.personalKeyConfigured() else {
@@ -192,7 +196,7 @@ struct RealtimeTranslateRootView: View {
         viewModel.startSession()
         return
       }
-      guard modelDownload.requestModelUse(hasLocalModel: FirstRunModel.localModelExists()) else {
+      guard modelDownload.requestModelUse() else {
         startsWhenModelDownloadFinishes = modelDownload.hasDownloadConsent
         return
       }
@@ -202,13 +206,17 @@ struct RealtimeTranslateRootView: View {
   }
 
   private func acceptModelDownloadConsent() {
+    guard !isRemovingDownloadedModel else { return }
     modelDownload.recordConsent()
     firstRun.acceptConsent()
   }
 
   private func removeDownloadedModel() {
+    guard !isRemovingDownloadedModel else { return }
+    isRemovingDownloadedModel = true
+    startsWhenModelDownloadFinishes = false
     Task {
-      startsWhenModelDownloadFinishes = false
+      defer { isRemovingDownloadedModel = false }
       guard await viewModel.closeModelForRemoval() else {
         settings.toasts.show(String(
           localized: "End the session before removing the downloaded model.",

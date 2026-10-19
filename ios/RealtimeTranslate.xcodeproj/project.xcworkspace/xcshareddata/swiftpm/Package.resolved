@@ -1,13 +1,12 @@
 {
-  "originHash" : "65a9b760d9e4352debbcef4b7a6af4e52f149faeada9d928f884dbc23ced9618",
+  "originHash" : "07c481f78530633414abc9722c6a9555fee22b1ba5c0ecf5333023960a25940d",
   "pins" : [
     {
-      "identity" : "mlange_sdk",
+      "identity" : "zeticmlangeios",
       "kind" : "remoteSourceControl",
-      "location" : "git@github.com:zetic-ai/mlange_sdk.git",
+      "location" : "https://github.com/zetic-ai/ZeticMLangeiOS.git",
       "state" : {
-        "revision" : "4db439061c601d3ad1cf0f7365225382b936822f",
-        "version" : "0.0.0-internal.035dd5a8"
+        "revision" : "c5c197ba01c5a05d877e2b0abaa95eb70848fa3d"
       }
     }
   ],

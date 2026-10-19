@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
                 TurnTranslateRoot(
                     state = state,
                     history = viewModel.history,
+                    onGenerateSummary = { viewModel.summarizeSession(this, it) },
                     onAction = { action ->
                         if (action == UiAction.RequestPermission) {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -73,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        viewModel.history.interrupt()
         super.onStop()
     }
 

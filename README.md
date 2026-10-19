@@ -1,21 +1,27 @@
 # Relais
 
+AI summaries are a separate draft feature stacked after the design/history PRs. Physical-device output quality, memory and offline acceptance remain unvalidated. See [feature scope and acceptance checks](docs/ai-summary.md).
+
 Relais is a native iOS and Android app for two people to translate a conversation on one phone. Tap A or B to speak, then tap again to stop, or type a turn. Platform on-device speech recognition produces the original transcript and Melange runs `SJ_zetic/Hy-MT2-1.8B` for translation. There is no network STT fallback or automatic speaker separation.
 
 The interface uses Bouygues Telecom Trilogy colors, compact language controls, and wide A/B chat bubbles. The **translation appears first in bold**, with the smaller original transcript always visible below. Bouygues Speak headings and Bouygues Read body text retain native text scaling. Replay remains an explicit action.
 
-## Saved sessions
+## Saved sessions and summaries
 
-**End → End and save** writes the session before clearing the live conversation. **Menu → History** offers title search, date/duration/languages, reopening, rename and confirmed deletion. Opening a saved session shows its full transcript directly. A failed save retains the current conversation and offers retry.
+**End → End and save** writes the session before clearing the live conversation. **Menu → History** offers title search, date/duration/languages, reopening, rename and confirmed deletion. Session details have **AI summary** and **Transcript** tabs. A failed save retains the current conversation and offers retry.
 
-Finalized turns are checkpointed locally, including originals whose translation failed. iOS uses atomic, file-protected JSON files in Application Support, excluded from backup. Android uses atomic JSON replacement in `noBackupFilesDir` and disables app backup. No audio is retained. An interrupted session is recoverable from History.
+Finalized turns are checkpointed locally, including originals whose translation failed. iOS uses atomic, file-protected JSON files in Application Support, excluded from backup. Android uses atomic JSON replacement in `noBackupFilesDir` and disables app backup. No audio is retained. An interrupted session is recoverable from History; interrupted summaries become retryable rather than staying in a loading state.
 
-AI summarization is excluded from this change and is tracked in a separate follow-up draft PR. This version has no summary UI, model download, runtime or generation entry point.
+Summaries use the separate instruction model `zetic/LFM2.5-1.2B-Instruct`, version 1. The first use asks for permission to download model assets; this can use mobile data. Model acquisition/SDK authorization may need a network connection, but transcript inference runs locally with **no cloud fallback**. The translation model is released before summarizing, and starting a new conversation cancels and waits for summary cleanup before loading translation again. Keep the app in the foreground while summarizing; backgrounding interrupts generation safely.
+
+Summaries contain key points, decisions, actions, and questions. Source buttons open the corresponding transcript turns. The model is instructed to use only explicit facts and avoid invented owners or deadlines. Output must match the structured schema and reference existing turns. These checks cannot establish factual correctness: the screen labels the result as an AI summary to verify against the transcript.
+
+Long sessions are split into bounded Unicode-safe excerpts, with every original character retained. Excerpt summaries are shown in conversation order within each section. This avoids silent truncation, but may repeat points or miss a decision that depends on distant turns. Unsupported or malformed model output retains the transcript and offers retry.
 
 ## Build
 
 - [iOS build instructions](ios/README.md): SwiftUI, Xcode/XcodeGen. Retains the existing pinned internal SDK because its local archive/GGUF loading APIs are required by the app.
-- [Android build instructions](android/README.md): Kotlin, Compose, JDK 17, Android SDK 35. Uses the public Melange SDK 1.11.0 repository; the summary-specific runtime changes are deferred.
+- [Android build instructions](android/README.md): Kotlin, Compose, JDK 17, Android SDK 35. Uses Melange SDK 1.11.0 from its public GitHub release repository.
 - [Brand asset notices](THIRD_PARTY_NOTICES.md)
 - [Relais design and session contract](docs/relais.md)
 - [Translation prompt/model reference](docs/hy-mt2-integration-reference.md)
