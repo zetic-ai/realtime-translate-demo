@@ -17,11 +17,7 @@ struct WelcomeView: View {
   var body: some View {
     FirstRunSurface {
       VStack(alignment: .leading, spacing: 16) {
-        Image("ZeticLogo")
-          .resizable()
-          .scaledToFit()
-          .frame(height: 16)
-          .accessibilityHidden(true)
+        Text(verbatim: "Relais").font(.headline).foregroundStyle(DesignToken.accent)
         Text(FirstRunCopy.welcomeTitle)
           .font(.largeTitle)
           .fontWeight(.semibold)
@@ -100,7 +96,7 @@ struct PermissionPrimingView: View {
 
 // MARK: - Model download consent
 
-/// The consent step for the one large transfer the app ever makes. Shown only when no complete
+/// Consent for the translation-model download. Shown only when no complete
 /// local model exists, so a returning user goes straight into a local load.
 struct ModelConsentOverlay: View {
   let prompt: FirstRunModel.ConsentPrompt?

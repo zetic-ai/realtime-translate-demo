@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Every user-facing string in Zetic Relay. The product name Zetic Relay, the brand ZETIC, the
+<!-- Every user-facing string in Relais. The product name Relais, the brand ZETIC, the
      domain zetic.ai, the model name Hy-MT2, the
      speaker labels A and B, the three app-language names and the 38 Hy-MT2
      reading-language names are constants in code, so nothing can translate them
@@ -7,7 +7,7 @@
 <resources>
 
     <!-- The product name, the brand and the address are constants in code, not here. -->
-    <string name="app_name">Zetic Relay</string>
+    <string name="app_name" translatable="false">Relais</string>
 
     <!-- Status strip -->
     <string name="status_permission_required">Microphone permission required</string>
@@ -37,7 +37,7 @@
     <string name="speech_open_voice_input_settings">Open voice input settings</string>
 
     <!-- Session banner -->
-    <string name="banner_permission_body">Zetic Relay needs microphone access to recognize speech on this device.</string>
+    <string name="banner_permission_body">Relais needs microphone access to recognize speech on this device.</string>
     <string name="banner_open_app_settings">Open app settings</string>
     <string name="banner_allow_microphone">Allow microphone</string>
     <string name="banner_request_permission_accessibility">Request microphone permission</string>
@@ -163,4 +163,31 @@
     <string name="model_removal_complete">Downloaded model removed</string>
     <string name="model_removal_in_use">Finish the active translation before removing the model.</string>
     <string name="model_removal_failed">The downloaded model could not be removed.</string>
+    <string name="history_title">History</string>
+    <string name="history_return">Return to session</string>
+    <string name="history_new">New session</string>
+    <string name="history_empty">No saved sessions yet.</string>
+    <string name="history_search">Search sessions</string>
+    <string name="history_storage_error">Could not save or read history. Your current transcript is still here. Retry before ending.</string>
+    <string name="history_retry">Retry</string>
+    <string name="history_session">Session</string>
+    <string name="history_transcript">Transcript</string>
+    <string name="history_content">Session content</string>
+    <string name="history_options">Options</string>
+    <string name="history_rename">Rename</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_save">Save</string>
+    <string name="history_cancel">Cancel</string>
+    <string name="history_delete_question">Delete this session?</string>
+    <string name="history_delete_detail">This permanently deletes the transcript from this phone.</string>
+    <string name="history_translation_unavailable">Translation unavailable</string>
+    <string name="history_translation">Translation</string>
+    <string name="history_original">Original</string>
+    <string name="history_menu">Menu</string>
+    <string name="history_end">End</string>
+    <string name="history_end_question">End this session?</string>
+    <string name="history_end_save">End and save</string>
+    <string name="history_continue">Continue session</string>
+    <string name="history_end_detail">The transcript will be saved in History.</string>
+    <string name="history_turn_count">%1$d turns</string>
 </resources>

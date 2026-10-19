@@ -6,7 +6,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Session status: Speaker A is speaking"].exists)
     XCTAssertTrue(app.buttons["End Speaker A's turn"].exists)
     XCTAssertFalse(app.buttons["Start Speaker B's turn"].isEnabled)
-    XCTAssertTrue(app.buttons["End session"].exists)
+    XCTAssertTrue(app.buttons["end-session"].exists)
   }
 
   func testListeningLocksBothLanguageChips() {
@@ -34,7 +34,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(retry.waitForExistence(timeout: 5))
     XCTAssertTrue(retry.isEnabled)
     XCTAssertTrue(retry.isHittable)
-    XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
+    XCTAssertGreaterThanOrEqual(retry.frame.height.rounded(), 44)
 
     XCTAssertTrue(app.buttons["Start Speaker A's turn"].isEnabled)
     XCTAssertTrue(app.buttons["Start Speaker B's turn"].isEnabled)
@@ -72,39 +72,40 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Start Speaker A's turn"].isEnabled)
   }
 
-  /// Three things in one bar, in one order: the wordmark on the leading edge, the title in the
-  /// middle, the menu button on the trailing edge. The wordmark is decoration and nothing else,
-  /// so the assertion that it is not in `app.buttons` is the point of this test rather than a
-  /// detail of it: it went back to being a logo, and a logo that is still tappable is the old
-  /// design wearing the new one's layout.
-  func testHeaderPutsTheWordmarkLeadingAndTheMenuButtonTrailing() {
+  /// The compact header keeps navigation and End in predictable opposing positions.
+  func testHeaderShowsRelaisWithMenuAndEndAction() {
     let app = launch(state: "ready")
-
-    let wordmark = app.images["zetic-wordmark"]
-    let menu = app.buttons["Settings"]
-    XCTAssertTrue(wordmark.waitForExistence(timeout: 10))
-    XCTAssertEqual(wordmark.label, "ZETIC")
-    XCTAssertFalse(app.buttons["zetic-wordmark"].exists)
-    XCTAssertTrue(menu.exists)
-    XCTAssertTrue(menu.isHittable)
-
-    XCTAssertLessThan(wordmark.frame.maxX, menu.frame.minX)
-    XCTAssertLessThan(wordmark.frame.minX, app.frame.midX)
-    XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)
-    // A finger's worth of button in both directions, whatever the glyph inside it measures.
-    // Rounded, because a 44 pt frame comes back through the accessibility bridge as
-    // 43.99999999999999 and a literal comparison fails a button that is exactly the right size.
+    let menu = app.buttons["settings-menu"]
+    let end = app.buttons["end-session"]
+    XCTAssertTrue(menu.waitForExistence(timeout: 10))
+    XCTAssertTrue(end.isHittable)
+    XCTAssertTrue(app.staticTexts["Relais"].firstMatch.exists)
+    XCTAssertLessThan(menu.frame.midX, end.frame.midX)
     XCTAssertGreaterThanOrEqual(menu.frame.width.rounded(), 44)
-    XCTAssertGreaterThanOrEqual(menu.frame.height.rounded(), 44)
-    // The title sits between them rather than being pushed off one side.
-    let title = app.staticTexts["Turn Translate"].firstMatch
-    XCTAssertTrue(title.exists)
-    XCTAssertGreaterThan(title.frame.minX, wordmark.frame.maxX)
-    XCTAssertLessThan(title.frame.maxX, menu.frame.minX)
+  }
+
+  func testRelaisBubblesShowTranslationBeforeOriginalAndSaveToHistory() {
+    let app = launch(state: "readyWithTranscript")
+    let bubble = app.descendants(matching: .any).matching(
+      NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "conversation-bubble", "Hello.")
+    ).firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 5))
+    let translation = bubble.label.range(of: "Bonjour.")
+    let original = bubble.label.range(of: "Hello.")
+    XCTAssertNotNil(translation); XCTAssertNotNil(original)
+    if let translation, let original { XCTAssertLessThan(translation.lowerBound, original.lowerBound) }
+    app.buttons["end-session"].tap()
+    app.buttons["End and save"].tap()
+    XCTAssertTrue(app.staticTexts["Transcript"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["Prepare summary"].exists)
+    XCTAssertFalse(app.buttons["AI summary"].exists)
+    XCTAssertTrue(app.staticTexts["Hello."].firstMatch.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Bonjour."].firstMatch.exists)
   }
 
   func testTheMenuButtonOpensTheSettingsDrawerAndTheScrimClosesIt() {
     let app = launch(state: "ready")
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
 
     let visit = app.buttons["settings-visit-zetic"]
@@ -112,7 +113,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(visit.waitForExistence(timeout: 2))
     XCTAssertTrue(contact.exists)
     XCTAssertTrue(app.staticTexts["Settings"].exists)
-    XCTAssertTrue(contains(app, "Turn Translate"))
+    XCTAssertTrue(contains(app, "Relais"))
     XCTAssertTrue(contains(app, "stays on this phone"))
     XCTAssertTrue(app.buttons["settings-close"].exists)
 
@@ -123,6 +124,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testContactRowShowsTheCopyToast() {
     let app = launch(state: "ready")
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
     let contact = app.buttons["settings-contact-us"]
     XCTAssertTrue(contact.waitForExistence(timeout: 2))
@@ -147,7 +149,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     let copy = app.buttons["copy-bubble"]
     var menuShown = false
     for _ in 0..<3 where !menuShown {
-      bubble.press(forDuration: 1.5)
+      bubble.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4)).press(forDuration: 1.5)
       menuShown = copy.waitForExistence(timeout: 4)
     }
     XCTAssertTrue(menuShown)
@@ -165,7 +167,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   /// there is no sound state to draw.
   func testTheStatusStripCarriesNoSoundToggle() {
     let app = launch(state: "ready")
-    XCTAssertTrue(app.staticTexts["Session status: Ready to talk"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["end-session"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["speech-mute"].exists)
     XCTAssertFalse(app.buttons["Spoken translation on"].exists)
     XCTAssertFalse(app.buttons["Spoken translation off"].exists)
@@ -182,13 +184,13 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(replay.isEnabled)
     replay.tap()
 
-    XCTAssertGreaterThanOrEqual(replay.frame.width, 44)
-    XCTAssertGreaterThanOrEqual(replay.frame.height, 44)
+    XCTAssertGreaterThanOrEqual(replay.frame.width.rounded(), 44)
+    XCTAssertGreaterThanOrEqual(replay.frame.height.rounded(), 44)
 
     // A failed translation has nothing to play, so the control is absent rather than disabled.
     app.terminate()
     let failed = launch(state: "translationError")
-    XCTAssertTrue(failed.staticTexts["Session status: Ready to talk"].waitForExistence(timeout: 5))
+    XCTAssertTrue(failed.buttons["retry-translation"].waitForExistence(timeout: 5))
     XCTAssertFalse(failed.buttons["replay-translation"].exists)
   }
 
@@ -291,7 +293,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testReadyControlsRemainHittableAboveTheHomeIndicator() {
     let app = launch(state: "ready")
-    let endSession = app.buttons["End session"]
+    let endSession = app.buttons["end-session"]
 
     XCTAssertTrue(endSession.isHittable)
     XCTAssertLessThan(endSession.frame.maxY, app.frame.maxY)
@@ -342,7 +344,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     let download = app.buttons["consent-download"]
     XCTAssertTrue(download.waitForExistence(timeout: 5))
     XCTAssertTrue(contains(app, "1.91 GB"))
-    XCTAssertTrue(contains(app, "It downloads once"))
+    XCTAssertTrue(contains(app, "downloads in the background"))
     XCTAssertTrue(app.buttons["consent-not-now"].exists)
 
     app.buttons["consent-not-now"].tap()
@@ -370,7 +372,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["welcome-get-started"].exists)
     XCTAssertFalse(app.buttons["priming-continue"].exists)
     XCTAssertFalse(app.buttons["consent-download"].exists)
-    XCTAssertTrue(app.buttons["Settings"].exists)
+    XCTAssertTrue(app.buttons["settings-menu"].exists)
   }
 
   // MARK: - Typed input and clearing
@@ -383,7 +385,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(typedInput.isEnabled)
     // On the hint row, clear of the push-to-talk controls and the session action.
     XCTAssertGreaterThan(typedInput.frame.minY, app.buttons["Start Speaker A's turn"].frame.maxY)
-    XCTAssertLessThan(typedInput.frame.maxY, app.buttons["End session"].frame.minY)
+    XCTAssertLessThan(typedInput.frame.maxY, app.frame.maxY)
 
     typedInput.tap()
 
@@ -421,6 +423,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 10))
 
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
     let clear = app.buttons["settings-clear-conversation"]
     XCTAssertTrue(clear.waitForExistence(timeout: 5))
@@ -435,6 +438,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Start session"].exists)
 
     // With nothing left to clear the row stays where it is and stops being tappable.
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
     XCTAssertTrue(clear.waitForExistence(timeout: 5))
     XCTAssertFalse(clear.isEnabled)
@@ -442,6 +446,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testTheDrawerShowsAReadableDownloadedModelRemovalAlertAndCanCancelIt() {
     let app = launch(state: "setup")
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
 
     let remove = app.buttons["settings-remove-downloaded-model"]
@@ -481,6 +486,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   /// override written here would outlive the test and be read by the next launch.
   func testTheDrawerNamesTheAppLanguageAndDefaultsToTheSystemOne() {
     let app = launch(state: "ready")
+    app.buttons["settings-menu"].tap()
     app.buttons["Settings"].tap()
 
     let row = app.buttons["settings-app-language"]

@@ -22,7 +22,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
       alignSpokenLanguage(with: targetLanguageB, for: .b)
     }
   }
-  @Published private(set) var items: [ConversationItem]
+  @Published private(set) var items: [ConversationItem] { didSet { checkpointHistory() } }
+  let history: SessionHistory
+  private(set) var lastSavedSessionID: String?
   @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
   /// Whether the microphone and speech-recognition prompts have already been answered with a yes.
   /// Drives the first-run priming step only; the session flow still keys off `state`.
@@ -93,7 +95,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
        preferences: (any LanguagePreferenceStoring)? = nil,
        audioInterruptions: (any AudioInterruptionObserving)? = nil,
        finalizingDelay: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) },
-       now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+       now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+       history: SessionHistory? = nil) {
+    self.history = history ?? SessionHistory()
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     let store = preferences ?? EphemeralLanguagePreferences()
@@ -140,6 +144,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
     let value = ProcessInfo.processInfo.arguments.drop { $0 != "-uiState" }.dropFirst().first
     let store = UserDefaultsLanguagePreferences()
     switch value {
+    case "readyWithTranscript":
+      return RealtimeTranslateViewModel(state: .ready, items: previewItems, preferences: store)
     case "listeningA":
       return RealtimeTranslateViewModel(state: .listening(.a), items: previewItems, preferences: store)
     case "finalizingA":
@@ -166,7 +172,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     case "ready": return RealtimeTranslateViewModel(state: .ready, preferences: store)
     case "permissionRequired":
       return RealtimeTranslateViewModel(state: .permissionRequired, preferences: store)
-    default: return RealtimeTranslateViewModel(preferences: store)
+    default: return RealtimeTranslateViewModel(preferences: store, history: SessionHistory(store: .live()))
     }
   }
 
@@ -212,6 +218,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
           }
         }
         guard !Task.isCancelled else { return }
+        history.beginCapture()
         state = .ready
       } catch {
         guard !Task.isCancelled else { return }
@@ -362,9 +369,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   // MARK: - Clearing the conversation
 
-  /// Nothing is stored, so clearing asks nothing: it only has to be impossible mid-utterance,
-  /// where it would strand the bubble a translation is about to land in, and pointless on an
-  /// already empty transcript.
+  /// Clearing starts a fresh transcript after archiving finalized turns.
   var canClearConversation: Bool { !items.isEmpty && state.activeSpeaker == nil }
 
   /// Empties the transcript without touching the session: the model stays resident, the languages
@@ -372,6 +377,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// a bubble that is going away, so it stops with it.
   func clearConversation() {
     guard canClearConversation else { return }
+    guard savedTurns.isEmpty || history.checkpoint(savedTurns, ending: true) != nil else { return }
     cancelFinalizingWatchdog()
     endLiveTranslation()
     speechOutput.stop()
@@ -382,13 +388,20 @@ final class RealtimeTranslateViewModel: ObservableObject {
     notice = nil
   }
 
-  /// Ending a session clears the conversation but keeps the model resident, so the next
-  /// `Start Session` reaches `.ready` without another load. The model unloads in `deinit`.
-  ///
-  /// It also stops the work the session started. Cancelling the task that was watching a load is
-  /// not the same as stopping the load: without the second call the 1.9 GB transfer someone just
-  /// declined keeps running on their cellular connection with nothing on screen to say so.
+  /// Snapshot only finalized originals; provisional speech is never presented as a saved fact.
+  var savedTurns: [SavedTurn] {
+    items.filter { !$0.transcript.isEmpty && $0.state != .partial }.map { item in
+      SavedTurn(id: item.id.uuidString, speaker: item.speaker.rawValue, original: item.transcript,
+                translation: item.translation, sourceLanguage: sourceLanguage(for: item.speaker).identifier,
+                targetLanguage: item.targetLanguage.code)
+    }
+  }
+  private func checkpointHistory() { if !savedTurns.isEmpty { history.checkpoint(savedTurns) } }
+
+  /// Save first; a failed write retains the live transcript.
   func endSession() {
+    lastSavedSessionID = savedTurns.isEmpty ? nil : history.checkpoint(savedTurns, ending: true)
+    guard savedTurns.isEmpty || lastSavedSessionID != nil else { return }
     sessionTask?.cancel()
     sessionTask = nil
     translationRuntime.cancelLoad()

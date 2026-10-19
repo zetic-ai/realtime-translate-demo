@@ -1248,19 +1248,19 @@
         }
       }
     },
-    "Turn Translate needs microphone and speech recognition access on this device.": {
-      "comment": "Session banner body text. Turn Translate is the product name, keep it as is",
+    "Relais needs microphone and speech recognition access on this device.": {
+      "comment": "Session banner body text. Relais is the product name, keep it as is",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turn Translate necesita acceso al micrófono y al reconocimiento de voz en este dispositivo."
+            "value": "Relais necesita acceso al micrófono y al reconocimiento de voz en este dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turn Translate a besoin du micro et de la reconnaissance vocale sur cet appareil."
+            "value": "Relais a besoin du micro et de la reconnaissance vocale sur cet appareil."
           }
         }
       }
@@ -1891,6 +1891,653 @@
           "stringUnit": {
             "state": "translated",
             "value": "Écrire en %@"
+          }
+        }
+      }
+    },
+    "history.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial"
+          }
+        }
+      },
+      "comment": "Relais session history: title. Saved transcripts stay on this device."
+    },
+    "history.return": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to session"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir à la session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a la sesión"
+          }
+        }
+      },
+      "comment": "Relais session history: return. Saved transcripts stay on this device."
+    },
+    "history.new": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva sesión"
+          }
+        }
+      },
+      "comment": "Relais session history: new. Saved transcripts stay on this device."
+    },
+    "history.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved sessions yet."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune session enregistrée."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todavía no hay sesiones guardadas."
+          }
+        }
+      },
+      "comment": "Relais session history: empty. Saved transcripts stay on this device."
+    },
+    "history.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search sessions"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher une session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar sesiones"
+          }
+        }
+      },
+      "comment": "Relais session history: search. Saved transcripts stay on this device."
+    },
+    "history.storageError": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save or read history. Your current transcript is still here. Retry before ending."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de lire ou d’enregistrer l’historique. La transcription actuelle est conservée. Réessayez avant de terminer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer o guardar el historial. La transcripción actual sigue aquí. Reintenta antes de terminar."
+          }
+        }
+      },
+      "comment": "Relais session history: storageError. Saved transcripts stay on this device."
+    },
+    "history.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réessayer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
+        }
+      },
+      "comment": "Relais session history: retry. Saved transcripts stay on this device."
+    },
+    "history.session": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión"
+          }
+        }
+      },
+      "comment": "Relais session history: session. Saved transcripts stay on this device."
+    },
+    "history.transcript": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcript"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcripción"
+          }
+        }
+      },
+      "comment": "Relais session history: transcript. Saved transcripts stay on this device."
+    },
+    "history.options": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opciones"
+          }
+        }
+      },
+      "comment": "Relais session history: options. Saved transcripts stay on this device."
+    },
+    "history.rename": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar nombre"
+          }
+        }
+      },
+      "comment": "Relais session history: rename. Saved transcripts stay on this device."
+    },
+    "history.delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        }
+      },
+      "comment": "Relais session history: delete. Saved transcripts stay on this device."
+    },
+    "history.save": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
+        }
+      },
+      "comment": "Relais session history: save. Saved transcripts stay on this device."
+    },
+    "history.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      },
+      "comment": "Relais session history: cancel. Saved transcripts stay on this device."
+    },
+    "history.deleteQuestion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this session?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer cette session ?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar esta sesión?"
+          }
+        }
+      },
+      "comment": "Relais session history: deleteQuestion. Saved transcripts stay on this device."
+    },
+    "history.deleteDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the transcript from this phone."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcription sera définitivement supprimée de ce téléphone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcripción se eliminará permanentemente de este teléfono."
+          }
+        }
+      },
+      "comment": "Relais session history: deleteDetail. Saved transcripts stay on this device."
+    },
+    "history.translationUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation unavailable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduction indisponible"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción no disponible"
+          }
+        }
+      },
+      "comment": "Relais session history: translationUnavailable. Saved transcripts stay on this device."
+    },
+    "history.translation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduction"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción"
+          }
+        }
+      },
+      "comment": "Relais session history: translation. Saved transcripts stay on this device."
+    },
+    "history.original": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        }
+      },
+      "comment": "Relais session history: original. Saved transcripts stay on this device."
+    },
+    "history.menu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menú"
+          }
+        }
+      },
+      "comment": "Relais session history: menu. Saved transcripts stay on this device."
+    },
+    "history.end": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar"
+          }
+        }
+      },
+      "comment": "Relais session history: end. Saved transcripts stay on this device."
+    },
+    "history.endQuestion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End this session?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer la session ?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Terminar esta sesión?"
+          }
+        }
+      },
+      "comment": "Relais session history: endQuestion. Saved transcripts stay on this device."
+    },
+    "history.endSave": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End and save"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer et enregistrer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar y guardar"
+          }
+        }
+      },
+      "comment": "Relais session history: endSave. Saved transcripts stay on this device."
+    },
+    "history.continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue session"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer la session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar sesión"
+          }
+        }
+      },
+      "comment": "Relais session history: continue. Saved transcripts stay on this device."
+    },
+    "history.endDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The transcript will be saved in History."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcription sera enregistrée dans l’historique."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcripción se guardará en el historial."
+          }
+        }
+      },
+      "comment": "Relais session history: endDetail. Saved transcripts stay on this device."
+    },
+    "history.turnCount %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld turns"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld interventions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld intervenciones"
+          }
+        }
+      },
+      "comment": "Relais session history: turnCount %lld. Saved transcripts stay on this device."
+    },
+    "After you agree, it downloads in the background and stays on this phone.": {
+      "comment": "Consent card body text explaining the background download after approval",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After you agree, it downloads in the background and stays on this phone."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Après votre accord, le modèle se télécharge en arrière-plan et reste sur ce téléphone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tras tu confirmación, el modelo se descarga en segundo plano y permanece en este teléfono."
           }
         }
       }

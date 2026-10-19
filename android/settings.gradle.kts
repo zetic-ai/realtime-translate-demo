@@ -1,8 +1,3 @@
-val githubPackagesUsername = providers.gradleProperty("githubPackagesUsername")
-    .orElse(providers.environmentVariable("GITHUB_ACTOR"))
-val githubPackagesPassword = providers.gradleProperty("githubPackagesPassword")
-    .orElse(providers.environmentVariable("GITHUB_TOKEN"))
-
 pluginManagement {
     repositories {
         google()
@@ -16,12 +11,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://maven.pkg.github.com/zetic-ai/mlange_sdk")
-            credentials {
-                username = githubPackagesUsername.orNull
-                password = githubPackagesPassword.orNull
-            }
+        ivy {
+            name = "ZeticMLangeAndroidGitHubRelease"
+            url = uri("https://github.com/zetic-ai/ZeticMLangeAndroid/releases/download")
+            patternLayout { artifact("[revision]/[artifact]-[revision](-[classifier]).[ext]") }
+            metadataSources { gradleMetadata() }
+            content { includeGroup("com.zeticai.mlange"); includeGroup("com.zeticai.mlange.backend") }
         }
     }
 }

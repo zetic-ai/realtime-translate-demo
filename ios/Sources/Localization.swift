@@ -21,7 +21,7 @@ import Foundation
 enum AppText {
   /// The product name. It is the same in every language, so it is a plain Swift constant rather
   /// than a catalog entry: nothing should ever be able to translate it.
-  static let productName = "Turn Translate"
+  static let productName = "Relais"
 }
 
 // MARK: - The in-app language override

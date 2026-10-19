@@ -164,7 +164,7 @@ fun RealtimeTranslateApp(
     Column(
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
-        Header(state, onOpenSettingsDrawer)
+        Header(state, onOpenSettingsDrawer, onAction)
         LanguageBar(state, onAction, onOpenVoiceInputSettings)
         SessionBanner(state, onAction, onOpenAppSettings)
         // The copy confirmation is anchored to the bottom of the transcript rather than the bottom
@@ -193,51 +193,20 @@ fun RealtimeTranslateApp(
     }
 }
 
-@Composable private fun Header(state: SessionUiState, onOpenSettingsDrawer: () -> Unit) {
-    val status = statusLabel(state).text()
-    val statusAccessibility = stringResource(R.string.status_accessibility, status)
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(Modifier.fillMaxWidth().height(48.dp)) {
-            Image(
-                painterResource(R.drawable.zetic_logo),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.height(16.dp).align(Alignment.CenterStart),
-            )
-            Text(
-                FirstRunCopy.PRODUCT_NAME,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            val settingsLabel = stringResource(R.string.settings_title)
-            IconButton(
-                onClick = onOpenSettingsDrawer,
-                modifier = Modifier.size(48.dp).align(Alignment.CenterEnd).semantics {
-                    contentDescription = settingsLabel
-                    role = Role.Button
-                },
-            ) {
-                Icon(painterResource(R.drawable.ic_menu), null, tint = TextSecondary, modifier = Modifier.size(18.dp))
-            }
+@Composable private fun Header(state: SessionUiState, onOpenSettingsDrawer: () -> Unit, onAction: (UiAction) -> Unit) {
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 8.dp)) {
+        IconButton(onClick = onOpenSettingsDrawer, modifier = Modifier.align(Alignment.CenterStart)) {
+            Icon(painterResource(R.drawable.ic_menu), stringResource(R.string.history_menu), tint = TextPrimary)
         }
-        Text(
-            status,
-            color = TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.semantics { contentDescription = statusAccessibility },
-        )
-        val pendingSpeechPack = state.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
-            .any { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
-        if (state.speechLanguageCatalogLoading && !pendingSpeechPack) {
-            Text(stringResource(R.string.speech_catalog_loading), color = TextSecondary, fontSize = 12.sp)
+        Text(FirstRunCopy.PRODUCT_NAME, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+            modifier = Modifier.align(Alignment.Center))
+        if (state.conversationStarted) TextButton(onClick = { onAction(UiAction.EndSession) },
+            enabled = state.activeSpeaker() == null, modifier = Modifier.align(Alignment.CenterEnd)) {
+            Text(stringResource(R.string.history_end))
         }
-        state.speechLanguageCatalogMessage?.let { Text(it.text(), color = TextSecondary, fontSize = 12.sp) }
     }
+    if (state.activeSpeaker() != null) Text(statusLabel(state).text(), fontSize = 11.sp, color = TextSecondary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
     HorizontalDivider(color = DividerLine)
 }
 
@@ -261,13 +230,19 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     onOpenVoiceInputSettings: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SpeakerLanguageChip(Speaker.A, state, onAction, onOpenVoiceInputSettings, Modifier.weight(1f, fill = false))
         SpeakerLanguageChip(Speaker.B, state, onAction, onOpenVoiceInputSettings, Modifier.weight(1f, fill = false))
     }
+    val pendingSpeechPack = state.speechLanguages.filterIsInstance<SpeechLanguage.Installed>()
+        .any { it.onDeviceStatus == SpeechLanguage.OnDeviceStatus.DownloadPending }
+    if (state.speechLanguageCatalogLoading && !pendingSpeechPack) Text(stringResource(R.string.speech_catalog_loading),
+        color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
+    state.speechLanguageCatalogMessage?.let { Text(it.text(), color = TextSecondary, fontSize = 12.sp,
+        modifier = Modifier.padding(horizontal = 16.dp)) }
     HorizontalDivider(color = DividerLine)
 }
 
@@ -605,8 +580,8 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
         LazyColumn(
             Modifier.fillMaxSize(),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(8.dp),
         ) {
             if (state.conversations.isEmpty() && state.phase !in setOf(
                     SessionPhase.PermissionRequired,
@@ -699,11 +674,11 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
     val copyAction = stringResource(R.string.bubble_copy_action)
     val bubbleAccessibility = stringResource(R.string.bubble_accessibility, item.speaker.label)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val bubbleMaxWidth = (maxWidth - 64.dp).coerceAtLeast(1.dp)
+        val bubbleMaxWidth = (maxWidth - 16.dp).coerceAtLeast(1.dp)
         Column(
             Modifier
                 .align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
-                .widthIn(max = bubbleMaxWidth)
+                .widthIn(max = bubbleMaxWidth).fillMaxWidth()
                 .clip(MessageShape)
                 .background(speakerTint(item.speaker))
                 .combinedClickable(
@@ -712,7 +687,7 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     onLongClick = { menuExpanded = true },
                     onLongClickLabel = copyAction,
                 )
-                .padding(12.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .semantics { contentDescription = bubbleAccessibility },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -722,26 +697,11 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     onClick = { menuExpanded = false; onCopyBubble(item) },
                 )
             }
-            Text(
-                stringResource(R.string.bubble_speaker_heading, item.speaker.label),
-                color = speakerDeep(item.speaker),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                item.transcript.ifBlank { stringResource(R.string.bubble_listening) },
-                fontSize = 16.sp,
-                color = if (item.transcript.isBlank()) TextSecondary else TextPrimary,
-            )
-            Text(
-                stringResource(
-                    R.string.bubble_destination,
-                    item.speaker.other().label,
-                    item.targetLanguage.localizedName(LocalConfiguration.current.locales[0] ?: Locale.getDefault()),
-                ),
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${item.speaker.label} · ${item.targetLanguage.code.uppercase()}",
+                    color = speakerDeep(item.speaker), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.history_translation), color = TextSecondary, fontSize = 11.sp)
+            }
             // The replay control sits in the bottom trailing corner of the translation region, as a
             // separate element from the bubble, so the bubble's own label and its copy long press
             // are unchanged.
@@ -750,12 +710,12 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Column(
-                    Modifier.widthIn(max = (bubbleMaxWidth - 36.dp).coerceAtLeast(1.dp)),
+                    Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     when {
                         item.translation != null ->
-                            Text(item.translation, fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text(item.translation, fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Bold, lineHeight = 24.sp)
                         item.translationError != null -> {
                             Text(item.translationError.text(), color = Error, fontSize = 12.sp)
                             if (!isRecognizerLive) {
@@ -781,6 +741,13 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     )
                 }
             }
+            HorizontalDivider(color = DividerLine)
+            Text(stringResource(R.string.history_original), fontSize = 11.sp, color = TextSecondary)
+            Text(
+                item.transcript.ifBlank { stringResource(R.string.bubble_listening) },
+                fontSize = 13.sp, lineHeight = 19.sp,
+                color = if (item.transcript.isBlank()) TextSecondary else TextPrimary,
+            )
         }
     }
 }
@@ -817,8 +784,8 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
 ) {
     HorizontalDivider(color = DividerLine)
     Column(
-        Modifier.fillMaxWidth().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PttControl(Speaker.A, state, onAction, Modifier.weight(1f))
@@ -835,7 +802,7 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                 Icon(painterResource(R.drawable.ic_keyboard), null, tint = TextSecondary)
             }
         }
-        SessionButton(state, onAction)
+        if (!state.conversationStarted) SessionButton(state, onAction)
     }
 }
 
@@ -898,7 +865,7 @@ private fun bottomHint(state: SessionUiState): UiText {
                 contentDescription = if (enabled) actionLabel else blockedLabel
                 if (!enabled) disabled()
             }
-            .padding(vertical = 16.dp, horizontal = 8.dp),
+            .heightIn(min = 48.dp).padding(vertical = 8.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(

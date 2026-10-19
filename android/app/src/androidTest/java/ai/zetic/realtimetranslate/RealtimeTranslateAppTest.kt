@@ -58,8 +58,8 @@ class RealtimeTranslateAppTest {
     @Test fun finalBubbleDisplaysSpeakerTargetAndTranslationError() {
         val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = UiText.raw("Hy-MT2 runtime verification is incomplete."))))
         setApp(state)
-        composeRule.onNodeWithText("Speaker B").assertIsDisplayed()
-        composeRule.onNodeWithText("To A - English").assertIsDisplayed()
+        composeRule.onNodeWithText("B · EN").assertIsDisplayed()
+        composeRule.onNodeWithText("Translation").assertIsDisplayed()
         composeRule.onNodeWithText("Hy-MT2 runtime verification is incomplete.").assertIsDisplayed()
     }
 
@@ -96,10 +96,10 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Conversation card 1:", substring = true).assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Start speaker A").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Start speaker B").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("End session").assertIsDisplayed()
+        composeRule.onNodeWithText("End").assertIsDisplayed()
         repeat(12) { history.performTouchInput { swipeUp() } }
         composeRule.onNodeWithText("Conversation card 6:", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("End session").assertIsDisplayed()
+        composeRule.onNodeWithText("End").assertIsDisplayed()
     }
 
     @Test fun appendedConversationCardAutoScrollsToNewest() {
@@ -118,14 +118,14 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithTag(CONVERSATION_BOTTOM_TAG).assertIsDisplayed()
     }
 
-    @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
+    @Test fun headerCarriesRelaisAndTheMenu() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        composeRule.onNodeWithText("Relais").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Menu").assertIsDisplayed()
 
-        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
-        val settings = composeRule.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot
-        assertTrue(title.right < settings.left)
+        val title = composeRule.onNodeWithText("Relais").fetchSemanticsNode().boundsInRoot
+        val settings = composeRule.onNodeWithContentDescription("Menu").fetchSemanticsNode().boundsInRoot
+        assertTrue(settings.right <= title.left)
         assertTrue(settings.width >= 44 * composeRule.activity.resources.displayMetrics.density)
     }
 
@@ -287,7 +287,7 @@ class RealtimeTranslateAppTest {
         setApp(readyConversationState())
         composeRule.onNodeWithContentDescription("Start speaker A").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Start speaker B").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("End session").assertIsEnabled()
+        composeRule.onNodeWithText("End").assertIsEnabled()
         composeRule.onNodeWithContentDescription("Type a message").assertIsEnabled()
         composeRule.onNodeWithText("Speaks").assertDoesNotExist()
         composeRule.onNodeWithText("Reads").assertDoesNotExist()

@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         val isPermissionGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        viewModel.restoreHistory(this)
         viewModel.dispatch(SessionAction.RestoreLanguagePreferences(this))
         viewModel.dispatch(SessionAction.PermissionChanged(isPermissionGranted))
         viewModel.dispatch(SessionAction.PrepareBackgroundDownload(this))
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
             RealtimeTranslateTheme {
                 TurnTranslateRoot(
                     state = state,
+                    history = viewModel.history,
                     onAction = { action ->
                         if (action == UiAction.RequestPermission) {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -68,6 +70,10 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
     }
 
     override fun onResume() {

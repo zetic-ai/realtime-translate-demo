@@ -981,6 +981,7 @@ final class RealtimeTranslateTests: XCTestCase {
 
     viewModel.startSession()
     XCTAssertEqual(viewModel.state, .loadingModel(nil))
+    await waitUntil { loading.loadCount == 1 }
     viewModel.endSession()
 
     XCTAssertEqual(loading.cancelLoadCount, 1)
@@ -1369,14 +1370,14 @@ final class RealtimeTranslateTests: XCTestCase {
 
   func testAboutSectionReadsTheBundleNameAndVersion() {
     let info = AppInfo(info: [
-      "CFBundleDisplayName": "Turn Translate", "CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"
+      "CFBundleDisplayName": "Relais", "CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"
     ])
 
-    XCTAssertEqual(info.displayName, "Turn Translate")
+    XCTAssertEqual(info.displayName, "Relais")
     XCTAssertEqual(info.versionLine, "Version 1.2 (7)")
     XCTAssertEqual(AppInfo(info: ["CFBundleName": "RealtimeTranslate"]).displayName, "RealtimeTranslate")
-    XCTAssertEqual(AppInfo(info: nil).displayName, "Turn Translate")
-    XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Zetic Relay")
+    XCTAssertEqual(AppInfo(info: nil).displayName, "Relais")
+    XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Relais")
   }
 
   // MARK: - First run
@@ -2834,9 +2835,6 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertFalse(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root).isEmpty)
   }
 
-  /// The sole-key guess is good enough to load with: the worst a wrong one costs is an init that
-  /// fails and a remote load that runs instead. It is not good enough to delete with, where the
-  /// same guess removes whatever single model a shared cache happens to hold.
   func testDeletingRefusesACacheWhoseIndexDoesNotNameThisModel() throws {
     let root = try makeCacheFixture()
     let manager = FileManager.default
@@ -2847,7 +2845,7 @@ final class RealtimeTranslateTests: XCTestCase {
     index["resolvedModels"] = [[String: Any]]()
     try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
 
-    // Loading still takes the guess, which is what keeps a cold launch off the network.
+    // Loading still takes the single-model fallback; deletion requires an explicit name.
     XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
 
     XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
@@ -3000,7 +2998,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(AudioInterruptionCopy.notice, "Interrupted. Tap to talk again.")
     XCTAssertEqual(AppLanguageCopy.title, "App language")
     XCTAssertEqual(SpeechSourceLanguage.automatic.name, "Automatic")
-    XCTAssertEqual(AppText.productName, "Turn Translate")
+    XCTAssertEqual(AppText.productName, "Relais")
   }
 
   /// The compiled catalog has to reach the app bundle, not just the source tree. Only the entries

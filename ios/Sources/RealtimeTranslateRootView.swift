@@ -1,31 +1,23 @@
 import SwiftUI
 import UIKit
 
-/// ZETIC minimal design tokens. White surfaces, near-black text, one teal accent.
+/// Relais uses Bouygues Telecom Trilogy colors with native system typography.
 enum DesignToken {
-  static let accent = Color(red: 45 / 255, green: 189 / 255, blue: 178 / 255)
+  static let accent = Color(red: 37/255, green: 70/255, blue: 95/255)
   static let surface = Color.white
-  static let surfaceSubtle = Color(red: 240 / 255, green: 240 / 255, blue: 240 / 255)
-  static let divider = Color(red: 232 / 255, green: 232 / 255, blue: 232 / 255)
-  static let textPrimary = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
-  static let textSecondary = Color(red: 107 / 255, green: 107 / 255, blue: 107 / 255)
-  static let error = Color(red: 201 / 255, green: 42 / 255, blue: 42 / 255)
-
-  /// Per-speaker identity families, both derived from the brand system: speaker A is the teal
-  /// family and speaker B is the ink family. Color is always redundant with the speaker label
-  /// and the leading/trailing alignment, never the only distinguisher.
-  static let accentA = Color(red: 45 / 255, green: 189 / 255, blue: 178 / 255)
-  static let deepA = Color(red: 23 / 255, green: 135 / 255, blue: 125 / 255)
-  static let tintA = Color(red: 233 / 255, green: 247 / 255, blue: 245 / 255)
-  static let borderA = Color(red: 191 / 255, green: 231 / 255, blue: 226 / 255)
-  static let accentB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
-  static let deepB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
-  /// One step deeper than the old `#F0F0F0`, matched to `tintA`'s lightness so the two bubble
-  /// fills separate from the white page by the same amount. At `#F0F0F0` against `#E9F7F5` the
-  /// two speakers were the same block of pale at arm's length, which is the distance this app is
-  /// used at: one phone on a table between two people.
-  static let tintB = Color(red: 233 / 255, green: 233 / 255, blue: 233 / 255)
-  static let borderB = Color(red: 217 / 255, green: 217 / 255, blue: 217 / 255)
+  static let surfaceSubtle = Color(red: 239/255, green: 242/255, blue: 248/255)
+  static let divider = Color(red: 187/255, green: 198/255, blue: 205/255)
+  static let textPrimary = accent
+  static let textSecondary = accent.opacity(0.8)
+  static let error = Color(red: 212/255, green: 45/255, blue: 2/255)
+  static let accentA = accent
+  static let deepA = accent
+  static let tintA = surfaceSubtle
+  static let borderA = divider
+  static let accentB = Color(red: 204/255, green: 78/255, blue: 10/255)
+  static let deepB = accentB
+  static let tintB = Color(red: 233/255, green: 239/255, blue: 244/255)
+  static let borderB = divider
 }
 
 extension Speaker {
@@ -35,60 +27,13 @@ extension Speaker {
   var borderColor: Color { self == .a ? DesignToken.borderA : DesignToken.borderB }
 }
 
-/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`, at the leading edge of the
-/// navigation bar.
-///
-/// Decoration, not a control. Carrying the settings drawer behind the brand mark meant the one way
-/// into settings was a logo, which is a thing users read rather than a thing they press, and it
-/// needed a glyph glued to its side to admit that it was tappable at all. The drawer now has its
-/// own button at the trailing edge, so the lockup is back to being what it looks like.
-private struct ZeticWordmark: View {
-  var body: some View {
-    Image("ZeticLogo")
-      .resizable()
-      .scaledToFit()
-      .frame(height: 24)
-      .accessibilityIdentifier("zetic-wordmark")
-      // `Text(verbatim:)`, like the product name: the brand is spelled the same in every language
-      // and must never reach the string catalog.
-      .accessibilityLabel(Text(verbatim: "ZETIC"))
-  }
-}
-
-/// The three lines are the platform's own settled sign for "a list of settings lives behind this",
-/// with no direction in them to get wrong. Not a downward chevron: a chevron pointing down
-/// promises something that drops from where it stands, and the drawer slides in from the trailing
-/// edge.
 enum SettingsMenuGlyph {
   static let menu = "line.3.horizontal"
 }
 
-/// The standalone menu button that opens the settings drawer, at the trailing edge of the
-/// navigation bar. Icon-only, and drawn to a full `Layout.tapTarget` box in both directions
-/// however small the glyph inside it measures.
-private struct SettingsMenuButton: View {
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      Image(systemName: SettingsMenuGlyph.menu)
-        .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(DesignToken.textSecondary)
-        .frame(minWidth: Layout.tapTarget, minHeight: Layout.tapTarget, alignment: .trailing)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .accessibilityIdentifier("settings-menu")
-    // The `Text` overload rather than the string one, so the label can carry a translator comment
-    // and still resolve against the environment locale.
-    .accessibilityLabel(Text("Settings",
-                             comment: "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it"))
-  }
-}
-
 enum Layout {
-  static let message: CGFloat = 16
-  static let control: CGFloat = 20
+  static let message: CGFloat = 12
+  static let control: CGFloat = 12
   /// The minimum edge of anything that can be tapped. Every icon-only control in this app was
   /// drawn to its glyph (36x28, 32x32, 28x24) rather than to a finger, which is under the
   /// platform's own floor in both directions at once.
@@ -112,6 +57,9 @@ struct RealtimeTranslateRootView: View {
   @StateObject private var modelDownload = TranslationModelDownloadCoordinator()
   @StateObject private var conversationCopy = ConversationCopyModel()
   @StateObject private var typedInput = TypedInputModel()
+  @State private var showsHistory = false
+  @State private var confirmsEnd = false
+  @State private var savedID: String?
   @State private var startsWhenModelDownloadFinishes = false
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
@@ -170,7 +118,23 @@ struct RealtimeTranslateRootView: View {
         viewModel.startSession()
       }
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
-      .onChange(of: scenePhase) { _ in updateScreenAwake() }
+      .onChange(of: scenePhase) { phase in
+        updateScreenAwake()
+      }
+      .sheet(isPresented: $showsHistory) {
+        SessionHistoryView(history: viewModel.history, viewModel: viewModel, initialID: savedID)
+      }
+      .confirmationDialog("history.endQuestion", isPresented: $confirmsEnd, titleVisibility: .visible) {
+        Button("history.endSave") {
+          viewModel.endSession()
+          if !viewModel.history.storageFailed {
+            savedID = viewModel.lastSavedSessionID
+            showsHistory = savedID != nil
+          }
+        }
+        Button("history.continue", role: .cancel) {}
+      } message: { Text("history.endDetail") }
+      .overlay(alignment: .top) { HistoryStorageNotice(history: viewModel.history) }
   }
 
   /// The one place the idle timer is decided: a live session in the foreground keeps the screen
@@ -309,8 +273,8 @@ struct RealtimeTranslateRootView: View {
       // the screen down instead of overlapping anything.
       .safeAreaInset(edge: .top, spacing: 0) {
         VStack(spacing: 0) {
-          StatusStrip(title: modelDownload.isBackgroundDownloadInProgress
-                      ? modelDownload.phase.title : viewModel.state.title)
+          if viewModel.state != .ready { StatusStrip(title: modelDownload.isBackgroundDownloadInProgress
+                      ? modelDownload.phase.title : viewModel.state.title) }
           ThinDivider()
         }
         .background(DesignToken.surface)
@@ -319,28 +283,17 @@ struct RealtimeTranslateRootView: View {
       // never reach the catalog.
       .navigationTitle(AppText.productName)
       .navigationBarTitleDisplayMode(.inline)
-      // Three things in one bar: wordmark, title, menu button. All three survive every Dynamic
-      // Type category, checked at `accessibility5` on the narrowest phone this app runs on, because
-      // an inline navigation title caps its own growth well below where the row would run out of
-      // width. Nothing here has to be hidden or truncated at the accessibility sizes.
+      // End stays in the header so the bottom controls leave more room for the transcript.
       .toolbar {
-        // iOS 26 wraps toolbar items in a glass capsule; the minimal chrome stays flat, and the
-        // wordmark in particular must not be handed a capsule that would make decoration read as
-        // a control again.
+        ToolbarItem(placement: .principal) {
+          Text(verbatim: "Relais").font(.system(size: 19, weight: .bold)).foregroundStyle(DesignToken.accent)
+        }
         if #available(iOS 26.0, *) {
-          ToolbarItem(placement: .navigationBarLeading) {
-            ZeticWordmark()
-          }
-          .sharedBackgroundVisibility(.hidden)
-          ToolbarItem(placement: .navigationBarTrailing) {
-            SettingsMenuButton(action: settings.open)
-          }
-          .sharedBackgroundVisibility(.hidden)
+          ToolbarItem(placement: .navigationBarLeading) { headerMenu }.sharedBackgroundVisibility(.hidden)
+          ToolbarItem(placement: .navigationBarTrailing) { headerEnd }.sharedBackgroundVisibility(.hidden)
         } else {
-          ToolbarItem(placement: .navigationBarLeading) { ZeticWordmark() }
-          ToolbarItem(placement: .navigationBarTrailing) {
-            SettingsMenuButton(action: settings.open)
-          }
+          ToolbarItem(placement: .navigationBarLeading) { headerMenu }
+          ToolbarItem(placement: .navigationBarTrailing) { headerEnd }
         }
       }
       .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -358,6 +311,21 @@ struct RealtimeTranslateRootView: View {
       }
     }
     .tint(DesignToken.accent)
+  }
+
+  private var headerMenu: some View {
+    Menu {
+      Button("history.title") { savedID = nil; showsHistory = true }
+        .disabled(viewModel.state.activeSpeaker != nil)
+      Button("Settings", action: settings.open)
+    } label: { Image(systemName: SettingsMenuGlyph.menu).frame(width: 44, height: 44) }
+      .accessibilityLabel(Text("history.menu")).accessibilityIdentifier("settings-menu")
+  }
+  @ViewBuilder private var headerEnd: some View {
+    if viewModel.isSessionLive {
+      Button("history.end") { confirmsEnd = true }.disabled(viewModel.state.activeSpeaker != nil)
+        .accessibilityIdentifier("end-session")
+    }
   }
 
   private var emptyHint: String? { ConversationEmptyHint.text(for: viewModel.state) }
@@ -500,6 +468,7 @@ private struct LanguageBar: View {
       .overlay(
         RoundedRectangle(cornerRadius: Layout.control).stroke(speaker.borderColor, lineWidth: 1)
       )
+      .frame(minHeight: Layout.tapTarget).contentShape(Rectangle())
     }
     .disabled(!viewModel.canEditLanguages)
     .accessibilityIdentifier("languages-\(speaker.rawValue)")
@@ -541,8 +510,8 @@ private struct SessionBanner: View {
       switch viewModel.state {
     case .permissionRequired:
       banner {
-        Text("Turn Translate needs microphone and speech recognition access on this device.",
-             comment: "Session banner body text. Turn Translate is the product name, keep it as is")
+        Text("Relais needs microphone and speech recognition access on this device.",
+             comment: "Session banner body text. Relais is the product name, keep it as is")
           .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
         // `BannerButton` takes a plain `String`, so each title is looked up here rather than
@@ -688,7 +657,7 @@ private struct ConversationList: View {
       ScrollViewReader { proxy in
         ScrollView {
           VStack(spacing: 0) {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 8) {
               if items.isEmpty, let emptyHint {
                 Text(emptyHint)
                   .font(.subheadline)
@@ -704,7 +673,7 @@ private struct ConversationList: View {
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(8)
             Color.clear.frame(height: 1).id(Self.bottomAnchor)
           }
           // The offset probe: one reading for the whole transcript, taken from a single
@@ -826,58 +795,39 @@ private struct ConversationBubble: View {
   /// translated bubble carries it: it is the only way this app makes a sound.
   private var showsReplayControl: Bool { item.speakableTranslation != nil }
 
+  @ScaledMetric(relativeTo: .body) private var translationSize = 16.0
+  @ScaledMetric(relativeTo: .caption) private var originalSize = 13.0
   var body: some View {
-    // The bubble sizes to its content and the spacer takes what is left, rather than the bubble
-    // taking the full width and the spacer 32 points of it. Two near-full-width blocks whose only
-    // difference is a 12 point label and two tints one step apart are not two speakers at arm's
-    // length; a shape that leans is legible across a table.
     HStack(spacing: 0) {
-      if !isA { Spacer(minLength: 64) }
+      if !isA { Spacer(minLength: 16) }
       VStack(alignment: .leading, spacing: 6) {
-        Text("Speaker \(item.speaker.rawValue)",
-             comment: "Chat bubble heading. %@ is the speaker label, A or B")
-          .font(.caption).fontWeight(.semibold).foregroundStyle(item.speaker.deepColor)
-        // Two branches rather than one ternary: a ternary between a literal and a variable is a
-        // `String`, which takes the verbatim `Text` overload and never reaches the catalog.
-        Group {
-          if item.transcript.isEmpty {
-            Text("Listening...", comment: "Chat bubble placeholder before any words are recognized")
-          } else {
-            Text(verbatim: item.transcript)
-          }
+        HStack {
+          Text(verbatim: "\(item.speaker.rawValue) · \(item.targetLanguage.code.uppercased())")
+            .font(.caption2.bold()).foregroundStyle(item.speaker.deepColor)
+            .accessibilityLabel(Text("Speaker \(item.speaker.rawValue)") + Text(verbatim: " · \(item.targetLanguage.code.uppercased())"))
+          Text("history.translation").font(.caption2).foregroundStyle(DesignToken.textSecondary)
+          Spacer(minLength: 0)
         }
-        .font(.body).foregroundStyle(DesignToken.textPrimary)
-        ThinDivider()
-        Text("To \(item.speaker.counterpart.rawValue) - \(item.targetLanguage.menuName)",
-             comment: "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name")
-          .font(.caption).foregroundStyle(DesignToken.textSecondary)
         deliveryLine
+        ThinDivider()
+        Text("history.original").font(.caption2).foregroundStyle(DesignToken.textSecondary)
+        Text(verbatim: item.transcript)
+          .font(.system(size: originalSize)).foregroundStyle(DesignToken.textPrimary)
+          .padding(.trailing, showsReplayControl ? 36 : 0)
       }
-      .frame(alignment: .leading)
-      .padding(12)
-      .background(item.speaker.tintColor)
-      .clipShape(RoundedRectangle(cornerRadius: Layout.message))
-      // A long press on the bubble offers one labelled `Copy`, rather than copying silently on
-      // any long press: the transcript scrolls, so a bare gesture would fire on a slow drag, and
-      // the menu is also what puts the action in the accessibility rotor.
+      .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 8)
+      .background(item.speaker.tintColor).clipShape(RoundedRectangle(cornerRadius: Layout.message))
+      .contentShape(RoundedRectangle(cornerRadius: Layout.message))
       .contextMenu {
         if item.copyableText != nil {
-          Button(ConversationCopyModel.action, action: copy)
-            .accessibilityIdentifier("copy-bubble")
+          Button(ConversationCopyModel.action, action: copy).accessibilityIdentifier("copy-bubble")
         }
       }
-      // Grouped on the bubble rather than the row, so the accessibility element and the long-press
-      // target are the bubble itself and not the empty half of the screen beside it.
-      .accessibilityElement(children: .combine)
-      .accessibilityIdentifier("conversation-bubble")
-      // Applied after the grouping, which is what keeps the replay control its own element rather
-      // than a glyph folded into the bubble's combined label.
+      .accessibilityElement(children: .combine).accessibilityIdentifier("conversation-bubble")
       .overlay(alignment: .bottomTrailing) {
-        if showsReplayControl {
-          ReplayButton(isEnabled: canReplay, replay: replay)
-        }
+        if showsReplayControl { ReplayButton(isEnabled: canReplay, replay: replay) }
       }
-      if isA { Spacer(minLength: 64) }
+      if isA { Spacer(minLength: 16) }
     }
   }
 
@@ -893,9 +843,9 @@ private struct ConversationBubble: View {
       provisionalLine
     case .translated:
       Text(verbatim: item.translation ?? "")
-        .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
+        .font(.system(size: translationSize, weight: .bold)).foregroundStyle(DesignToken.textPrimary)
         // Keeps the last line of a long translation clear of the replay glyph in the corner.
-        .padding(.trailing, showsReplayControl ? 34 : 0)
+
     case let .translationFailed(reason):
       // Already localized where it was built, by `TranslationFailureCopy` at the display site.
       // A failed turn is the one thing on this screen that used to be a dead end: the words were
@@ -981,7 +931,7 @@ private struct BottomBar: View {
   private var showsHint: Bool { dynamicTypeSize < Layout.hintCeiling }
 
   var body: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 4) {
       ThinDivider()
       HStack(alignment: .top, spacing: 12) {
         PTTButton(speaker: .a, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
@@ -1051,10 +1001,7 @@ private struct BottomBar: View {
     if viewModel.canCancelModelPreparation {
       outlinedAction(title: SessionActionCopy.cancelPreparation, identifier: "cancel-model-preparation",
                      action: viewModel.endSession)
-    } else if viewModel.isSessionLive {
-      outlinedAction(title: SessionActionCopy.end, identifier: "end-session",
-                     action: viewModel.endSession)
-    } else {
+    } else if !viewModel.isSessionLive {
       Button(action: startSession) {
         Text(verbatim: SessionActionCopy.start)
           .font(.footnote).fontWeight(.semibold)
@@ -1153,7 +1100,7 @@ private struct PTTButton: View {
         // an ellipsis where the instruction should be, on the only two buttons that matter.
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
-        .padding(.vertical, 14)
+        .padding(.vertical, 2)
         .padding(.horizontal, 4)
     })
     .buttonStyle(.plain)
