@@ -58,29 +58,6 @@ struct TrilogyActionStyle: ButtonStyle {
   }
 }
 
-struct TrilogySessionTabs: View {
-  @Binding var selection: Int
-  private let labels: [LocalizedStringKey] = ["history.summary", "history.transcript"]
-
-  var body: some View {
-    HStack(spacing: 4) {
-      ForEach(labels.indices, id: \.self) { index in
-        Button { selection = index } label: {
-          Text(labels[index]).font(TrilogyFont.text(.footnote, emphasized: true))
-            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            .padding(8).frame(maxWidth: .infinity, minHeight: Layout.actionHeight)
-            .foregroundStyle(selection == index ? DesignToken.surface : DesignToken.textPrimary)
-            .background(selection == index ? DesignToken.accent : DesignToken.surface)
-            .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-        }.buttonStyle(.plain)
-          .accessibilityAddTraits(selection == index ? .isSelected : [])
-      }
-    }.padding(4)
-      .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
-      .accessibilityElement(children: .contain).accessibilityLabel(Text("history.content"))
-  }
-}
-
 /// Measure the bubble at its natural width, capped at 84% of the transcript viewport.
 /// The row occupies the full width so short A/B replies keep their left/right alignment.
 struct ChatBubbleRow: SwiftUI.Layout {

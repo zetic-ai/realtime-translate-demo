@@ -82,11 +82,7 @@ final class LlamaCppLoadedModel: LoadedLanguageModel {
 }
 
 final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
-  private let modelName: String
-  private let version: Int?
-  private let maxOutputTokens: Int?
-  private let contextSize: Int
-  private let expectedModelKey: String?
+  private static let modelName = "SJ_zetic/Hy-MT2-1.8B"
 
   /// Builds the loaded model. Injected only by tests, which cannot reach a 1.9 GB SDK download;
   /// the app always takes the local-then-remote path in `makeModel`.
@@ -114,13 +110,7 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
   }
 
   init(personalKey: String? = nil, infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
-       modelFactory: ModelFactory? = nil, modelName: String = "SJ_zetic/Hy-MT2-1.8B", version: Int? = nil, maxOutputTokens: Int? = nil,
-       contextSize: Int = 2048, expectedModelKey: String? = nil) {
-    self.modelName = modelName
-    self.version = version
-    self.maxOutputTokens = maxOutputTokens
-    self.contextSize = contextSize
-    self.expectedModelKey = expectedModelKey
+       modelFactory: ModelFactory? = nil) {
     self.personalKey = personalKey ?? MelangeCredential.value(from: infoDictionary)
     self.modelFactory = modelFactory
   }
@@ -188,13 +178,12 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
     try Task.checkCancellation()
     return try await ZeticMLangeLLMModel(
       personalKey: personalKey,
-      name: modelName,
-      version: version,
+      name: Self.modelName,
+      version: nil,
       modelMode: .RUN_AUTO,
       // A completed background job owns the SDK cache. Keep it intact while the foreground model
       // initializes, rather than letting the initializer replace or discard its artifacts.
       cacheHandlingPolicy: .KEEP_EXISTING,
-      initOption: LLMInitOption(nCtx: contextSize),
       onDownload: { progress in onProgress(Double(progress)) }
     )
   }
@@ -207,14 +196,17 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
     await withCheckedContinuation { continuation in
       queue.async {
         LocalModelStore.sweepOrphans()
-        continuation.resume(returning: Self.makeLocalModel(modelName: self.modelName, contextSize: self.contextSize, expectedModelKey: self.expectedModelKey))
+        continuation.resume(returning: Self.makeLocalModel())
       }
     }
   }
 
-  // Keep the repository's pinned SDK: its local archive and GGUF APIs preserve offline loading.
-  private static func makeLocalModel(modelName: String, contextSize: Int, expectedModelKey: String?) -> (any LoadedLanguageModel)? {
-    if modelName == "SJ_zetic/Hy-MT2-1.8B", let module = LocalModelStore.discoverExtractedModule(forModelName: modelName),
+  // Order matters: the extracted module loads in seconds and needs no decryption, while the
+  // archive covers a cache state where the SDK has not extracted yet (it decrypts and unpacks,
+  // so it is slow and only works for model families its local loader supports). Logs stay
+  // content-free: never key material.
+  private static func makeLocalModel() -> (any LoadedLanguageModel)? {
+    if let module = LocalModelStore.discoverExtractedModule(forModelName: modelName),
        let quantType = llamaCppQuantType(forModuleNamed: module.url.lastPathComponent) {
       for apType in [APType.GPU, APType.CPU] {
         if let model = try? LLaMACppTargetModel(module.url.path, quantType, apType) {
@@ -223,11 +215,10 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
         }
       }
     }
-    if let archive = LocalModelStore.discoverArchive(forModelName: modelName),
-       expectedModelKey == nil || archive.modelKey == expectedModelKey {
+    if let archive = LocalModelStore.discoverArchive(forModelName: modelName) {
       let secretKeyHex = LocalModelStore.secretKeyHex(forArtifactID: archive.artifactID)
       if let model = try? ZeticMLangeLLMModel(
-        localZtcURL: archive.url, secretKeyHex: secretKeyHex, modelKey: archive.modelKey, initOption: LLMInitOption(nCtx: contextSize)
+        localZtcURL: archive.url, secretKeyHex: secretKeyHex, modelKey: archive.modelKey
       ) {
         NSLog("model load: reusing downloaded archive, no network needed")
         return model
@@ -248,41 +239,32 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
   }
 
   func translate(prompt: String) async throws -> String {
-    let cancellation = GenerationCancellation()
-    let tokenLimit = maxOutputTokens
-    return try await withTaskCancellationHandler(operation: {
-      try await withCheckedThrowingContinuation { continuation in
-        // The model is read through `self` and then held on its own: a generation runs for seconds,
-        // and a block that kept the runtime alive for all of it would be the block holding the last
-        // strong reference when `deinit` runs.
-        queue.async { [weak self] in
-          guard let model = self?.model else {
-            continuation.resume(throwing: TranslationRuntimeError.modelNotLoaded)
-            return
+    try await withCheckedThrowingContinuation { continuation in
+      // The model is read through `self` and then held on its own: a generation runs for seconds,
+      // and a block that kept the runtime alive for all of it would be the block holding the last
+      // strong reference when `deinit` runs.
+      queue.async { [weak self] in
+        guard let model = self?.model else {
+          continuation.resume(throwing: TranslationRuntimeError.modelNotLoaded)
+          return
+        }
+        defer { try? model.cleanUp() }
+        do {
+          try model.run(prompt)
+          var accumulator = TranslationResponseAccumulator()
+          while true {
+            let result = model.waitForNextToken()
+            let hasToken = try accumulator.append(
+              token: result.token, generatedTokens: result.generatedTokens, code: result.code
+            )
+            if !hasToken || result.isFinished { break }
           }
-          defer { try? model.cleanUp() }
-          do {
-            try cancellation.check()
-            try model.run(prompt)
-            var tokenCount = 0
-            var accumulator = TranslationResponseAccumulator()
-            while true {
-              try cancellation.check()
-              let result = model.waitForNextToken()
-              tokenCount += 1
-              if let tokenLimit, tokenCount > tokenLimit { throw SummaryError.invalidOutput }
-              let hasToken = try accumulator.append(
-                token: result.token, generatedTokens: result.generatedTokens, code: result.code
-              )
-              if !hasToken || result.isFinished { break }
-            }
-            continuation.resume(returning: try accumulator.finalOutput())
-          } catch {
-            continuation.resume(throwing: error)
-          }
+          continuation.resume(returning: try accumulator.finalOutput())
+        } catch {
+          continuation.resume(throwing: error)
         }
       }
-    }, onCancel: { cancellation.cancel() })
+    }
   }
 
   /// Unloads the model and disowns any load still in flight. Both halves matter: without the
@@ -332,11 +314,4 @@ final class MelangeTranslationRuntime: TranslationRuntime, @unchecked Sendable {
     self.model = nil
     Self.release(model, on: queue)
   }
-}
-
-private final class GenerationCancellation: @unchecked Sendable {
-  private let lock = NSLock()
-  private var cancelled = false
-  func cancel() { lock.lock(); cancelled = true; lock.unlock() }
-  func check() throws { lock.lock(); defer { lock.unlock() }; if cancelled { throw CancellationError() } }
 }

@@ -1,15 +1,11 @@
 package ai.zetic.realtimetranslate
 
 import android.content.Context
-import com.zeticai.mlange.core.model.llm.LLMInitOption
-import com.zeticai.mlange.core.cache.ModelCacheHandlingPolicy
 import com.zeticai.mlange.core.model.llm.LLMModelMode
 import com.zeticai.mlange.core.model.llm.LLMNextTokenResult
 import com.zeticai.mlange.core.model.llm.ZeticMLangeLLMModel
 import com.zeticai.mlange.core.utils.error.ZeticMLangeException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
-import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,19 +36,14 @@ interface HyMt2ModelSession {
 
 class MelangeHyMt2Translator(
     private val personalKey: String,
-    private val modelName: String = MODEL_NAME,
-    private val maxOutputTokens: Int? = null,
-    private val contextSize: Int = 2048,
     private val createModel: (Context, (Float) -> Unit) -> HyMt2ModelSession = { context, onProgress ->
         ZeticHyMt2ModelSession(
             ZeticMLangeLLMModel(
                 context = context,
                 personalKey = personalKey,
-                name = modelName,
+                name = MODEL_NAME,
                 version = MODEL_VERSION,
                 modelMode = LLMModelMode.RUN_AUTO,
-                cacheHandlingPolicy = ModelCacheHandlingPolicy.KEEP_EXISTING,
-                initOption = LLMInitOption(nCtx = contextSize),
                 onDownload = onProgress,
             ),
         )
@@ -77,11 +68,7 @@ class MelangeHyMt2Translator(
                     throw TranslationFailure(UiText.res(R.string.error_model_start_failed))
                 }
                 buildString {
-                    var count = 0
                     while (true) {
-                        coroutineContext.ensureActive()
-                        count++
-                        if (maxOutputTokens != null) check(count <= maxOutputTokens) { "Generation limit reached" }
                         val token = loadedModel.waitForNextToken()
                         if (token.status != 0) throw TranslationFailure(UiText.res(R.string.error_model_stopped))
                         append(token.token)

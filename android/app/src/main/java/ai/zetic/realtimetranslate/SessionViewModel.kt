@@ -45,7 +45,7 @@ class SessionViewModel(
     private val audioInterruptionFactory: (Context) -> RecordingAudioInterruption = { AndroidRecordingAudioInterruption(it) },
     initialState: SessionUiState = SessionUiState(SessionPhase.PermissionRequired),
 ) : ViewModel() {
-    var history = SessionHistory(scope = viewModelScope)
+    var history = SessionHistory()
         private set
     private var persistentHistory = false
     private val mutableState = MutableStateFlow(initialState)
@@ -111,7 +111,7 @@ class SessionViewModel(
 
     fun restoreHistory(context: Context) {
         if (!persistentHistory) {
-            history = SessionHistory(SessionFileStore(File(context.noBackupFilesDir, "relais-sessions")), viewModelScope)
+            history = SessionHistory(SessionFileStore(File(context.noBackupFilesDir, "relais-sessions")))
             persistentHistory = true
         }
     }
@@ -368,7 +368,6 @@ class SessionViewModel(
         if (!modelLoadStarted) return
         modelLoadJob = viewModelScope.launch {
             runCatching {
-                history.stopAndWait()
                 translator.load(context, loadProgress@{ progress ->
                     runForCurrentModelLoad(loadGeneration, downloadGeneration) {
                         val current = mutableState.value
@@ -705,10 +704,6 @@ class SessionViewModel(
             (it.sourceLanguage as? SpeechLanguage.Installed)?.languageTag ?: "auto", it.targetLanguage.code)
     }
     private fun checkpointHistory() { val turns = savedTurns(); if (turns.isNotEmpty()) history.checkpoint(turns) }
-    fun summarizeSession(context: Context, id: String) {
-        if (mutableState.value.conversationStarted || mutableState.value.phase == SessionPhase.LoadingModel) return
-        history.summarize(context.applicationContext, id) { translator.unload() }
-    }
 
     private fun endSession() {
         val turns = savedTurns()
@@ -778,7 +773,6 @@ class SessionViewModel(
         }
     }
     override fun onCleared() {
-        history.interrupt()
         invalidateBackgroundDownloadWork()
         invalidateModelLoadWork()
         translationGeneration.incrementAndGet()

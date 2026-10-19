@@ -87,7 +87,6 @@ fun TurnTranslateRoot(
     hasPersonalKey: Boolean,
     onOpenVoiceInputSettings: () -> Unit = {},
     history: SessionHistory? = null,
-    onGenerateSummary: (String) -> Unit = {},
 ) {
     var showHistory by remember { mutableStateOf(false) }
     var savedId by remember { mutableStateOf<String?>(null) }
@@ -260,7 +259,7 @@ fun TurnTranslateRoot(
 
         if (showHistory && history != null) {
             SessionHistoryScreen(history, state.conversationStarted || state.phase == SessionPhase.LoadingModel,
-                initialId = savedId, generate = onGenerateSummary, close = { showHistory = false })
+                initialId = savedId, close = { showHistory = false })
         }
         if (confirmEnd) AlertDialog(onDismissRequest = { confirmEnd = false },
             title = { Text(stringResource(R.string.history_end_question)) },

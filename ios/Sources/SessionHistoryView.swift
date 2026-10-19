@@ -23,8 +23,6 @@ struct SessionHistoryView: View {
               HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
               HStack {
                 Text(verbatim: session.turns.map(\.targetLanguage).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: " · ").uppercased())
-                Spacer()
-                Text(summaryStatusKey(session.summaryStatus))
               }.font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             }.padding(.vertical, 4)
           }
@@ -48,24 +46,11 @@ struct SessionHistoryView: View {
   }
 }
 
-private func summaryStatusKey(_ status: SummaryStatus) -> LocalizedStringKey {
-  switch status {
-  case .pending: "history.summaryPending"
-  case .generating: "history.generating"
-  case .ready: "history.summaryReady"
-  case .failed: "history.summaryFailed"
-  }
-}
-
 struct SavedSessionView: View {
   @ObservedObject var history: SessionHistory
   @ObservedObject var viewModel: RealtimeTranslateViewModel
   let id: String
   @Environment(\.dismiss) private var dismiss
-  @AppStorage("relais.summaryModelConsent.v1") private var consent = false
-  @State private var showConsent = false
-  @State private var tab = 0
-  @State private var focus: String?
   @State private var renaming = false
   @State private var deleting = false
   @State private var title = ""
@@ -80,8 +65,9 @@ struct SavedSessionView: View {
             HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
             Text("history.turnCount \(session.turns.count)").font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
           }.padding(.horizontal, 16)
-          TrilogySessionTabs(selection: $tab).padding(.horizontal, 16)
-          if tab == 0 { summaryContent(session) } else { transcript(session) }
+          Text("history.transcript").font(TrilogyFont.text(.headline)).padding(.horizontal, 16)
+          transcript(session)
+          HistoryStorageNotice(history: history)
         }
       } else { Text("history.empty") }
     }
@@ -107,64 +93,6 @@ struct SavedSessionView: View {
       Button("history.delete", role: .destructive) { history.delete(id); if !history.storageFailed { dismiss() } }
       Button("history.cancel", role: .cancel) {}
     } message: { Text("history.deleteDetail") }
-    .alert("history.modelTitle", isPresented: $showConsent) {
-      Button("history.download") { consent = true; viewModel.summarizeSession(id) }
-      Button("history.later", role: .cancel) {}
-    } message: { Text("history.modelDetail") }
-    .onAppear {
-      if consent, session?.summaryStatus == .pending { viewModel.summarizeSession(id) }
-    }
-  }
-
-  private func generate() { if consent { viewModel.summarizeSession(id) } else { showConsent = true } }
-
-  private func summaryContent(_ session: SavedSession) -> some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 24) {
-        Text("history.aiNotice").font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
-        if session.summaryStatus == .ready, let summary = session.summary {
-          section("history.essentials", summary.essentials, session)
-          section("history.decisions", summary.decisions, session)
-          section("history.actions", summary.actions, session)
-          section("history.questions", summary.questions, session)
-        } else if session.summaryStatus == .generating {
-          ProgressView(value: history.progress)
-          Text("history.generating")
-          Text("history.transcriptSafe").font(TrilogyFont.text(.subheadline))
-          Button("history.stopSummary", action: history.interrupt)
-        } else {
-          Text(LocalizedStringKey(session.summaryStatus == .failed ? "history.summaryFailed" : "history.summaryPending")).font(TrilogyFont.text(.headline))
-          Text("history.transcriptSafe").font(TrilogyFont.text(.subheadline))
-          Button(LocalizedStringKey(session.summaryStatus == .failed ? "history.retry" : "history.generate"), action: generate)
-            .buttonStyle(TrilogyActionStyle())
-            .disabled(viewModel.isSessionLive || viewModel.canCancelModelPreparation || history.storageFailed)
-          if viewModel.isSessionLive { Text("history.endFirst").font(TrilogyFont.text(.caption)) }
-        }
-        Button("history.readTranscript") { tab = 1 }
-        if history.storageFailed { Text("history.storageError").foregroundStyle(DesignToken.error) }
-      }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
-    }
-  }
-
-  private func section(_ title: LocalizedStringKey, _ points: [SummaryPoint], _ session: SavedSession) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(title).font(TrilogyFont.text(.headline))
-      if points.isEmpty { Text("history.noneStated").font(TrilogyFont.text(.subheadline)).foregroundStyle(DesignToken.textSecondary) }
-      ForEach(Array(points.enumerated()), id: \.offset) { _, point in
-        VStack(alignment: .leading, spacing: 4) {
-          Text(verbatim: point.text).font(TrilogyFont.text(.body))
-          // Each reference is a full touch target even when its visible number is small.
-          HStack(spacing: 4) {
-            ForEach(Array(Set(point.sources)).sorted(), id: \.self) { source in
-              Button { focus = source; tab = 1 } label: {
-                Text(verbatim: "[\((session.turns.firstIndex { $0.id == source } ?? 0) + 1)]")
-                  .font(TrilogyFont.text(.caption, emphasized: true)).frame(minWidth: 44, minHeight: 44)
-              }.accessibilityLabel(Text("history.source \((session.turns.firstIndex { $0.id == source } ?? 0) + 1)"))
-            }
-          }
-        }
-      }
-    }
   }
 
   private func transcript(_ session: SavedSession) -> some View {
@@ -184,11 +112,10 @@ struct SavedSessionView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
                 .clipShape(RoundedRectangle(cornerRadius: Layout.message))
-                .overlay(RoundedRectangle(cornerRadius: Layout.message).stroke(focus == turn.id ? DesignToken.accentB : .clear, lineWidth: 2))
-            }.id(turn.id)
+              }.id(turn.id)
           }
         }.padding(.horizontal, 16).padding(.vertical, 8)
-      }.onAppear { if let focus { DispatchQueue.main.async { proxy.scrollTo(focus, anchor: .center) } } }
+      }
     }
   }
 }

@@ -1,42 +1,28 @@
-# Relais native design refinement
+# Relais · Bouygues Trilogy refinement
 
-Stacked on PR #4 (`codex/relais-sessions`). This diff refines iOS and Android styling without changing speech, persistence or summary generation.
+Stacked on PR #4 (`codex/relais-sessions`). This diff refines iOS and Android styling while retaining saved-session history. AI summarization is excluded from both earlier PRs and tracked in a separate draft after this one.
 
 | Previous full-width bubbles | Updated compact bubbles |
 | --- | --- |
 | ![Before](design/conversation-before.png) | ![After](design/conversation-after.png) |
 
-Both captures show the same two complete English/French exchanges (four alternating A/B turns) in the French UI. The comparison isolates the previous full-width layout and the new content-sized bubbles. All dialogue is illustrative fixture text; no model inference is exercised.
+Both captures show the same two complete English/French exchanges (four alternating A/B turns) in the French UI. Dialogue is illustrative fixture text; no model inference is exercised.
 
-![Saved session with four turns and navy selected segment](design/session-after.png)
+Saved sessions open directly to their transcript, without summary controls:
 
-![All four saved transcript turns](design/transcript-after.png)
+![Saved transcript](design/transcript-after.png)
 
 ## Native adaptation
 
-- Bouygues Speak headings/wordmark, Read Regular body and Read Medium emphasis. Identical TTFs are registered on iOS and bundled as Android font resources. Native Dynamic Type / sp scaling and fallback glyphs remain enabled.
-- Translation stays first and bold, original stays visible below. Live and saved bubbles share a 16pt radius, 16pt horizontal / 12pt vertical padding and 16pt outer margins. Width follows the longest content line, capped at 84% of the transcript viewport; A stays left and B right. Controls use 8pt corners and full-width functional actions have a 48pt minimum height.
-- 8pt spacing with 4pt compact increments; navy functional primary, outlined complementary actions, and redundant A/B speaker labels alongside color.
-- Saved-session segments use navy selection and explicit selected accessibility traits on iOS. Android retains native tabs with the Trilogy typography/palette. Native system dialogs, keyboard and platform icons remain native.
+- Bouygues Speak headings/wordmark, Read Regular body and Read Medium emphasis, bundled identically on iOS and Android with native scaling and fallback glyphs.
+- Translation first and bold; original visible below. Live and saved bubbles use content-driven width capped at 84% of the viewport, 16pt outer margins, 16pt horizontal / 12pt vertical padding and a 16pt radius. A aligns left and B right.
+- Navy functional primary actions, outlined complementary actions, redundant A/B speaker labels, 8pt control corners, 48pt minimum full-width actions and 8pt/4pt spacing increments.
+- Native dialogs, keyboard and platform icons remain native adaptations. There is no summary tab, status badge, model consent or generation action in this version.
+
+## Reproducible captures
+
+In a Debug simulator build, launch with `-uiState designConversation -firstRun returning -AppleLanguages '(fr)' -AppleLocale fr_FR`. Four fixture turns use ephemeral preferences; the preview state is excluded from Release. End → Save opens the matching saved transcript directly. Existing single-turn UI fixtures remain available.
 
 ## Validation
 
-- iOS simulator build and 174 unit tests passed; 6 existing UI scenarios passed (header, save/history/transcript, control reachability, welcome, consent and typed input). The save/history scenario passed again after the final session heading and padding refinements.
-- Unsigned iPhone Release build passed. Three font files were verified present in the built app and byte-identical to the Android resources.
-- Android: 116 unit tests, debug APK build, lint, and instrumentation-test source compilation passed. No connected Android device/emulator was available, so Android UI tests were not executed.
-- Native French conversation and saved-session screens inspected; accessibility-extra-large text checked for the translated/original text, language controls and A/B talk controls. Simulator text size restored afterward.
-- `git diff --check` passed.
-
-Actual summary output quality, peak memory, offline acceptance and physical-device inference remain unverified. The summary preview is only an interface state, not model validation. The existing internal iOS SDK deployment-target linker warning remains.
-
-## Reproduce the representative captures
-
-In a Debug simulator build, launch with `-uiState designConversation -firstRun returning -AppleLanguages '(fr)' -AppleLocale fr_FR`. This seeds four turns and consistent English/French language controls using ephemeral preferences. The new preview state and dialogue are excluded from Release. End → Save produces the matching four-turn saved session; no summary model is run. The existing single-turn UI test fixture stays unchanged.
-
-The four-turn Debug build passed and all four translated/original turns were visually checked in the conversation and saved transcript. The main conversation and saved-session/transcript screenshots were replaced together.
-
-## Compact bubble refinement
-
-The same content-driven width rule is implemented in SwiftUI and Compose, including saved transcripts. Short replies no longer expand to the available width. Long text and accessibility sizes wrap within the 84% viewport cap; the font sizes, translation-first order, visible original, copy action and replay control are retained.
-
-The four-turn live conversation and saved transcript were inspected at standard size. Accessibility-extra-large wrapping and replay/text separation were checked, then the simulator size was restored. iOS Simulator Debug and unsigned iPhone Release builds passed. Seven existing iOS UI scenarios passed: save/history, typed input, replay control, initial long-conversation position, jump to latest, copy/toast and bottom-control accessibility. Android unit tests, debug build, lint and instrumentation-source compilation passed. Android UI execution still requires a device/emulator.
+The summary extraction passed 168 iOS unit tests, the save/history UI scenario, and 111 Android unit tests plus debug build, lint and instrumentation-source compilation. The save/history check verifies that summary actions are absent. Android device UI execution and physical-device translation acceptance remain outstanding. The separated summary PR has its own real-device acceptance gate; fixture screenshots do not establish AI output quality.

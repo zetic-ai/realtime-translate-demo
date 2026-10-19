@@ -1021,12 +1021,6 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(archive?.url.lastPathComponent, "Hy_MT2_1.ztc")
   }
 
-  func testSummaryCannotReuseTheOnlyTranslationArchive() throws {
-    let root = try makeCacheFixture()
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: SummaryEngine.modelName, cacheRoot: root))
-    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
-  }
-
   func testDiscoverArchiveSkipsAnArchiveShorterThanTheIndexedByteCount() throws {
     let root = try makeCacheFixture(archiveByteCount: 4, indexedByteCount: 8)
 
@@ -2851,8 +2845,8 @@ final class RealtimeTranslateTests: XCTestCase {
     index["resolvedModels"] = [[String: Any]]()
     try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
 
-    // With two models, loading must refuse the same ambiguous cache as deletion.
-    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+    // Loading still takes the single-model fallback; deletion requires an explicit name.
+    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
 
     XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
                    .refused)
