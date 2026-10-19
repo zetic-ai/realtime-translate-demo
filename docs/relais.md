@@ -8,22 +8,16 @@ The palette derives from [Bouygues Telecom Trilogy](https://design.bouyguestelec
 
 ## History
 
-End is disabled during a live turn so finalization is not discarded by a UI tap. Confirming End saves before resetting the live conversation and opens the saved session. Empty sessions are not added. The existing Clear conversation setting archives finalized turns before clearing them. History lists completed and recovered sessions; the active conversation stays on the live screen. History is accessible between turns; it does not reopen the microphone. Search matches titles. Rename is limited to 80 characters; Delete explicitly confirms removal of transcript and summary.
+End is disabled during a live turn so finalization is not discarded by a UI tap. Confirming End saves before resetting the live conversation and opens the saved session. Empty sessions are not added. The existing Clear conversation setting archives finalized turns before clearing them. History lists completed and recovered sessions; the active conversation stays on the live screen. History is accessible between turns; it does not reopen the microphone. Search matches titles. Rename is limited to 80 characters; Delete explicitly confirms removal of the transcript.
 
-Data schema version 1 stores a stable session ID, title, start/end time, app language for summary generation, ordered turns, summary status and optional structured summary. Each turn retains its stable ID, speaker, original text, translation if available, and source/target language codes. JSON writes replace a single session atomically. Files are private to the app and excluded from cloud backup. Damaged history is retained and reported; the app does not overwrite it with an empty list.
+Data schema version 1 stores a stable session ID, title, start/end time and ordered turns. Each turn retains its stable ID, speaker, original text, translation if available, and source/target language codes. JSON writes replace a single session atomically. Files are private to the app and excluded from cloud backup. Damaged history is retained and reported; the app does not overwrite it with an empty list.
 
-At process restart, unfinished sessions remain readable in History. Interrupted generation becomes Failed with retry. A summary failure never deletes the underlying session. Rename while generating is preserved; deletion/cancellation invalidates the worker before it can publish a late result.
+At process restart, unfinished sessions remain readable in History. Opening any saved session shows the original and translated turns directly. There are no summary tabs, summary status badges, extra model consent or generation actions in this version.
 
-## Summary runtime
+## Deferred feature
 
-- Model: `zetic/LFM2.5-1.2B-Instruct`, version 1, model key `1401c9e207e142e082563c15d1301293` (Melange reported ready and download-ready on 2026-10-16).
-- The [publisher's model card](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct) supplies the ChatML template. Output language follows the saved app language: English, French or Spanish.
-- Separate consent for the summary-model download. Transcript text is passed only to native model generation, never to a remote summarization endpoint. SDK asset acquisition/authorization still uses networking.
-- One model workload at a time: release translation before loading summary, and await summary shutdown before translation resumes. Token loops check cancellation and cap generated tokens. Models are cleaned up and closed after generation, including error/cancellation.
-- Original text is split by UTF-8 size on Unicode scalar/code-point boundaries, preserving every character and the original turn ID. Batches stay bounded; summaries are accumulated by section without truncating later turns. There is no global cross-excerpt synthesis.
-- Transcript delimiters are neutralized and the prompt treats transcript content as data. Strict output validation requires four arrays and nonempty valid source IDs for every point. The app does not execute generated text or use it as commands.
-- Summary sections: key points, decisions, actions, questions. No invented assignees/deadlines requested. The UI requires human verification and links each point to the saved original/translation.
+AI summarization, its second model and runtime changes, consent flow, structured output/citation validation and summary-specific tests belong to a separate draft PR stacked after the design/history work. The existing translation runtime implementations and iOS SDK pin are retained here. Android retains the public 1.11.0 SDK repository migration already in this PR because the old internal package is unavailable with current build credentials; no summary-model options are enabled.
 
 ## Validation boundary
 
-Unit tests cover persistence, interrupted-session recovery, write failures, UTF-8 chunk completeness, output schema and citation rejection, and the existing speech/translation lifecycle. Native builds validate SDK integration. Physical-device model quality, memory and airplane-mode acceptance require configured model credentials and supported test phones; a simulator/unit suite is not evidence for those properties.
+Unit tests cover persistence, interrupted-session recovery, write failures and the existing speech/translation lifecycle. Native builds validate integration. Physical-device translation acceptance and Android UI execution remain separate checks; a simulator/unit suite is not evidence for real model quality or device memory. Summary feature acceptance is deferred with its draft PR.

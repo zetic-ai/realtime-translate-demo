@@ -211,8 +211,6 @@ final class RealtimeTranslateViewModel: ObservableObject {
     sessionTask = Task { [weak self] in
       guard let self else { return }
       do {
-        await history.stopAndWait()
-        try Task.checkCancellation()
         try await translationRuntime.load { [weak self] progress in
           Task { @MainActor [weak self] in
             guard let self, case .loadingModel = state else { return }
@@ -399,12 +397,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
   }
   private func checkpointHistory() { if !savedTurns.isEmpty { history.checkpoint(savedTurns) } }
-  func summarizeSession(_ id: String) {
-    guard !isSessionLive, !canCancelModelPreparation else { return }
-    history.summarize(id) { [translationRuntime] in await translationRuntime.close() }
-  }
 
-  /// Save first; a failed write retains the live transcript. Summary generation releases the model later.
+  /// Save first; a failed write retains the live transcript.
   func endSession() {
     lastSavedSessionID = savedTurns.isEmpty ? nil : history.checkpoint(savedTurns, ending: true)
     guard savedTurns.isEmpty || lastSavedSessionID != nil else { return }

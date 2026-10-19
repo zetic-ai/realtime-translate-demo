@@ -165,14 +165,9 @@
     <string name="history_new">Nueva sesión</string>
     <string name="history_empty">Todavía no hay sesiones guardadas.</string>
     <string name="history_search">Buscar sesiones</string>
-    <string name="history_summary_pending">Resumen pendiente</string>
-    <string name="history_summary_ready">Resumen disponible</string>
-    <string name="history_summary_failed">Resumen interrumpido o no disponible</string>
-    <string name="history_generating">Preparando el resumen en este teléfono…</string>
     <string name="history_storage_error">No se pudo leer o guardar el historial. La transcripción actual sigue aquí. Reintenta antes de terminar.</string>
     <string name="history_retry">Reintentar</string>
     <string name="history_session">Sesión</string>
-    <string name="history_summary">Resumen de IA</string>
     <string name="history_transcript">Transcripción</string>
     <string name="history_content">Contenido de la sesión</string>
     <string name="history_options">Opciones</string>
@@ -181,22 +176,7 @@
     <string name="history_save">Guardar</string>
     <string name="history_cancel">Cancelar</string>
     <string name="history_delete_question">¿Eliminar esta sesión?</string>
-    <string name="history_delete_detail">Se eliminarán la transcripción y el resumen de este teléfono. No se puede deshacer.</string>
-    <string name="history_model_title">Activar resúmenes en el dispositivo</string>
-    <string name="history_model_detail">Relais necesita un modelo de IA adicional. La primera descarga es grande y puede usar datos móviles. Tras instalarlo, las transcripciones se procesan en este teléfono, sin recurrir a la nube. Mantén Relais abierto durante la preparación.</string>
-    <string name="history_download">Descargar y resumir</string>
-    <string name="history_later">Más tarde</string>
-    <string name="history_ai_notice">Resumen de IA · comprobar con la transcripción</string>
-    <string name="history_transcript_safe">La transcripción está guardada y disponible.</string>
-    <string name="history_stop_summary">Detener el resumen</string>
-    <string name="history_generate">Preparar resumen</string>
-    <string name="history_end_first">Termina la sesión actual antes de preparar un resumen.</string>
-    <string name="history_read_transcript">Leer transcripción</string>
-    <string name="history_essentials">Puntos clave</string>
-    <string name="history_decisions">Decisiones</string>
-    <string name="history_actions">Acciones pendientes</string>
-    <string name="history_questions">Por confirmar</string>
-    <string name="history_none_stated">Ninguno indicado explícitamente.</string>
+    <string name="history_delete_detail">La transcripción se eliminará permanentemente de este teléfono.</string>
     <string name="history_translation_unavailable">Traducción no disponible</string>
     <string name="history_translation">Traducción</string>
     <string name="history_original">Original</string>
@@ -205,6 +185,6 @@
     <string name="history_end_question">¿Terminar esta sesión?</string>
     <string name="history_end_save">Terminar y guardar</string>
     <string name="history_continue">Continuar sesión</string>
-    <string name="history_end_detail">La transcripción se guardará en el historial. Podrás preparar un resumen de IA en este teléfono.</string>
+    <string name="history_end_detail">La transcripción se guardará en el historial.</string>
     <string name="history_turn_count">%1$d intervenciones</string>
 </resources>
