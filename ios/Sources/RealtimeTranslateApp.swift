@@ -7,6 +7,7 @@ struct RealtimeTranslateApp: App {
   /// The first-run flags and the remembered languages are forced before any view or view model
   /// reads them, so a UI test's very first render already sees the state it asked for.
   init() {
+    TrilogyFont.configureNavigation()
     FirstRunDefaults.applyLaunchArguments()
     LanguagePreferenceDefaults.applyLaunchArguments()
     // `-resetAppLanguage` first, so a reset run cannot then re-apply the override it just cleared.
@@ -19,6 +20,7 @@ struct RealtimeTranslateApp: App {
   var body: some Scene {
     WindowGroup {
       RealtimeTranslateRootView(viewModel: .fromLaunchArguments())
+        .font(TrilogyFont.text(.body))
     }
   }
 }

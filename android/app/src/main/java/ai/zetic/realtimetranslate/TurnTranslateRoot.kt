@@ -451,7 +451,7 @@ private fun WelcomeSurface(onGetStarted: () -> Unit) {
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 ZeticLockup()
-                Text(FirstRunCopy.PRODUCT_NAME, color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                Text(FirstRunCopy.PRODUCT_NAME, color = TextPrimary, fontFamily = BouyguesSpeak, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
                 Text(stringResource(R.string.first_run_welcome_tagline), color = TextPrimary, fontSize = 16.sp)
                 HorizontalDivider(color = DividerLine)
                 Text(stringResource(R.string.first_run_welcome_privacy), color = TextSecondary, fontSize = 14.sp)
@@ -466,7 +466,7 @@ private fun PermissionPrimingSurface(onContinue: () -> Unit, onDecline: () -> Un
     FirstRunSurface(
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.first_run_priming_title), color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.first_run_priming_title), color = TextPrimary, fontFamily = BouyguesSpeak, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                 Text(stringResource(R.string.first_run_priming_microphone), color = TextPrimary, fontSize = 16.sp)
                 HorizontalDivider(color = DividerLine)
                 Text(stringResource(R.string.first_run_priming_speech), color = TextPrimary, fontSize = 16.sp)
@@ -507,14 +507,14 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
                 .background(Surface)
                 // A tap on the card is not a tap on the scrim.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(20.dp),
+                .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(stringResource(R.string.first_run_consent_title), color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.first_run_consent_title), color = TextPrimary, fontFamily = BouyguesSpeak, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text(ConsentSizeLine.text(), color = TextPrimary, fontSize = 16.sp)
                 Text(stringResource(R.string.first_run_consent_once), color = TextPrimary, fontSize = 16.sp)
                 if (prompt.cellularWarning) {
@@ -529,7 +529,7 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
 }
 
 @Composable private fun ZeticLockup() {
-    Text("Relais", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+    Text("Relais", fontFamily = BouyguesSpeak, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 }
 
 @Composable private fun PrimaryAction(label: String, onClick: () -> Unit) {
@@ -537,8 +537,8 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
         onClick = onClick,
         shape = ControlShape,
         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Surface),
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text(label, fontSize = 14.sp) }
+        modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight),
+    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
 }
 
 @Composable private fun SecondaryAction(label: String, onClick: () -> Unit) {
@@ -547,8 +547,8 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
         shape = ControlShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, DividerLine),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text(label, fontSize = 14.sp) }
+        modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight),
+    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
 }
 
 // endregion

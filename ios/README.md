@@ -16,3 +16,5 @@ If only command-line tools are selected globally, set `DEVELOPER_DIR=/Applicatio
 `RealtimeTranslateViewModel` owns speech/translation and checkpoints finalized turns. `SessionHistory.swift` provides atomic protected files, and recovery; `SessionHistoryView.swift` provides the history/detail screens. `MelangeTranslationRuntime` retains the existing translation implementation; the separate summary model is deferred. `Localizable.xcstrings` supplies English, French and Spanish UI text.
 
 The UI test launch states are fixtures, not microphone/model inference. See [Relais design and session contract](../docs/relais.md) for storage behavior and physical-device validation requirements. The app's bundle ID and signing team remain unchanged.
+
+For representative design captures, use a Debug build with `-uiState designConversation -firstRun returning -AppleLanguages '(fr)' -AppleLocale fr_FR`. It shows two illustrative English/French exchanges (four turns), without microphone or model inference. This preview state is excluded from Release. See [the design capture notes](../docs/design-review.md).

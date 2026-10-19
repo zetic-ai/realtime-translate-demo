@@ -114,7 +114,7 @@ private struct SettingsDrawerPanel: View {
       // which is the same word for the same thing and must not drift apart in translation.
       Text("Settings",
            comment: "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it")
-        .font(.headline)
+        .font(TrilogyFont.text(.headline))
         .foregroundStyle(DesignToken.textPrimary)
       Spacer(minLength: 8)
       Button(action: model.close) {
@@ -131,7 +131,7 @@ private struct SettingsDrawerPanel: View {
     }
     .padding(.leading, 16)
     .padding(.trailing, 8)
-    .padding(.vertical, 10)
+    .padding(.vertical, 12)
   }
 
   /// The drawer's row list. New settings rows slot in here between the existing rows and keep the
@@ -199,20 +199,20 @@ private struct SettingsDrawerPanel: View {
   }
 
   private var about: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 8) {
       Text("About", comment: "Settings drawer section heading above the app name and version")
-        .font(.caption)
+        .font(TrilogyFont.text(.caption))
         .foregroundStyle(DesignToken.textSecondary)
       Text(verbatim: model.appInfo.displayName)
-        .font(.subheadline)
+        .font(TrilogyFont.text(.subheadline))
         .foregroundStyle(DesignToken.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
       Text(verbatim: model.appInfo.versionLine)
-        .font(.caption)
+        .font(TrilogyFont.text(.caption))
         .foregroundStyle(DesignToken.textSecondary)
         .accessibilityIdentifier("settings-version")
       Text(verbatim: SettingsDrawerModel.privacyLine)
-        .font(.caption)
+        .font(TrilogyFont.text(.caption))
         .foregroundStyle(DesignToken.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -293,14 +293,14 @@ private struct SettingsRowLabel: View {
       // Both lines wrap rather than truncate: at the accessibility sizes a row's subtitle is
       // three lines of a 280 point panel, and "1.9 GB on this phone" losing its number to an
       // ellipsis would leave the row saying nothing at all.
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: 4) {
         Text(verbatim: title)
-          .font(.subheadline)
+          .font(TrilogyFont.text(.subheadline))
           .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
         if let subtitle {
           Text(verbatim: subtitle)
-            .font(.caption)
+            .font(TrilogyFont.text(.caption))
             .foregroundStyle(DesignToken.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -312,7 +312,7 @@ private struct SettingsRowLabel: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 16)
-    .padding(.vertical, 14)
+    .padding(.vertical, 16)
     .contentShape(Rectangle())
   }
 }

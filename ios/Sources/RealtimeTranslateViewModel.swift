@@ -142,6 +142,12 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// else a view model remembers nothing, so a test is never reading what the host app last wrote.
   static func fromLaunchArguments() -> RealtimeTranslateViewModel {
     let value = ProcessInfo.processInfo.arguments.drop { $0 != "-uiState" }.dropFirst().first
+    #if DEBUG
+    if value == "designConversation" {
+      return RealtimeTranslateViewModel(state: .ready, targetLanguageB: .hyMT2Candidates[2],
+                                       items: designPreviewItems)
+    }
+    #endif
     let store = UserDefaultsLanguagePreferences()
     switch value {
     case "readyWithTranscript":
@@ -825,6 +831,23 @@ final class RealtimeTranslateViewModel: ObservableObject {
       translation: "Bonjour.", state: .translated
     )
   ]
+  #if DEBUG
+  /// Two illustrative English/French exchanges for native design captures; no model is run.
+  private static let designPreviewItems: [ConversationItem] = [
+    ConversationItem(id: UUID(), speaker: .a,
+      transcript: "Can we meet on site Tuesday?", targetLanguage: .hyMT2Candidates[2],
+      translation: "Peut-on se voir sur site mardi ?", state: .translated),
+    ConversationItem(id: UUID(), speaker: .b,
+      transcript: "Oui, à dix heures.", targetLanguage: .hyMT2Candidates[1],
+      translation: "Yes, at ten.", state: .translated),
+    ConversationItem(id: UUID(), speaker: .a,
+      transcript: "Should I bring the report?", targetLanguage: .hyMT2Candidates[2],
+      translation: "Dois-je apporter le rapport ?", state: .translated),
+    ConversationItem(id: UUID(), speaker: .b,
+      transcript: "Oui, et les photos des vannes.", targetLanguage: .hyMT2Candidates[1],
+      translation: "Yes, and the valve photos.", state: .translated),
+  ]
+  #endif
   /// Twenty finished turns, alternating speakers, each one numbered so a test can name the newest
   /// without counting bubbles. Far more than fits on any phone at any text size.
   private static var longPreviewItems: [ConversationItem] {

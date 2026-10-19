@@ -18,12 +18,12 @@ struct SessionHistoryView: View {
         if history.savedSessions.isEmpty { Text("history.empty").foregroundStyle(DesignToken.textSecondary) }
         ForEach(history.savedSessions.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }) { session in
           NavigationLink(value: session.id) {
-            VStack(alignment: .leading, spacing: 6) {
-              Text(verbatim: session.title).font(.headline).lineLimit(2)
-              HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(.caption)
+            VStack(alignment: .leading, spacing: 8) {
+              Text(verbatim: session.title).font(TrilogyFont.text(.headline)).lineLimit(2)
+              HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
               HStack {
                 Text(verbatim: session.turns.map(\.targetLanguage).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: " · ").uppercased())
-              }.font(.caption).foregroundStyle(DesignToken.textSecondary)
+              }.font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
             }.padding(.vertical, 4)
           }
         }
@@ -33,10 +33,16 @@ struct SessionHistoryView: View {
       .scrollContentBackground(.hidden)
       .searchable(text: $query, prompt: Text("history.search"))
       .navigationTitle(Text("history.title"))
-      .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
-        Button(LocalizedStringKey(viewModel.isSessionLive ? "history.return" : "history.new")) { dismiss() }
-      } }
-    }.tint(DesignToken.accent).foregroundStyle(DesignToken.textPrimary)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Text("history.title").font(TrilogyFont.text(.title3)).foregroundStyle(DesignToken.textPrimary)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button(LocalizedStringKey(viewModel.isSessionLive ? "history.return" : "history.new")) { dismiss() }
+        }
+      }
+    }.tint(DesignToken.accent).foregroundStyle(DesignToken.textPrimary).font(TrilogyFont.text(.body))
   }
 }
 
@@ -48,20 +54,18 @@ struct SavedSessionView: View {
   @State private var renaming = false
   @State private var deleting = false
   @State private var title = ""
-  @ScaledMetric(relativeTo: .body) private var translationSize = 16.0
-  @ScaledMetric(relativeTo: .caption) private var originalSize = 13.0
   private var session: SavedSession? { history.sessions.first { $0.id == id } }
 
   var body: some View {
     Group {
       if let session {
         VStack(alignment: .leading, spacing: 12) {
-          VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: session.title).font(.title3.bold())
-            HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(.caption)
-            Text("history.turnCount \(session.turns.count)").font(.caption).foregroundStyle(DesignToken.textSecondary)
+          VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: session.title).font(TrilogyFont.text(.title3, emphasized: true))
+            HStack { Text(session.startedAt, format: .dateTime.day().month().hour().minute()); Text(verbatim: session.durationText) }.font(TrilogyFont.text(.caption))
+            Text("history.turnCount \(session.turns.count)").font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
           }.padding(.horizontal, 16)
-          Text("history.transcript").font(.headline).padding(.horizontal, 16)
+          Text("history.transcript").font(TrilogyFont.text(.headline)).padding(.horizontal, 16)
           transcript(session)
           HistoryStorageNotice(history: history)
         }
@@ -69,7 +73,11 @@ struct SavedSessionView: View {
     }
     .navigationTitle(Text("history.session"))
     .navigationBarTitleDisplayMode(.inline)
-    .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Text("history.session").font(TrilogyFont.text(.title3)).foregroundStyle(DesignToken.textPrimary)
+      }
+      ToolbarItem(placement: .navigationBarTrailing) {
       Menu {
         Button("history.rename") { title = session?.title ?? ""; renaming = true }
         Button("history.delete", role: .destructive) { deleting = true }
@@ -92,19 +100,21 @@ struct SavedSessionView: View {
       ScrollView {
         LazyVStack(spacing: 8) {
           ForEach(Array(session.turns.enumerated()), id: \.element.id) { index, turn in
-            VStack(alignment: .leading, spacing: 6) {
-              Text(verbatim: "\(turn.speaker) · \(turn.targetLanguage.uppercased()) · \(index + 1)")
-                .font(.caption).foregroundStyle(DesignToken.textSecondary)
-              if let translation = turn.translation { Text(verbatim: translation).font(.system(size: translationSize, weight: .bold)) }
-              else { Text("history.translationUnavailable").font(.caption) }
-              Divider()
-              Text(verbatim: turn.original).font(.system(size: originalSize)).textSelection(.enabled)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-              .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
-              .clipShape(RoundedRectangle(cornerRadius: 12))
-              .padding(turn.speaker == "A" ? .trailing : .leading, 16).id(turn.id)
+            ChatBubbleRow(isTrailing: turn.speaker == "B") {
+              VStack(alignment: .leading, spacing: 8) {
+                Text(verbatim: "\(turn.speaker) · \(turn.targetLanguage.uppercased()) · \(index + 1)")
+                  .font(TrilogyFont.text(.caption)).foregroundStyle(DesignToken.textSecondary)
+                if let translation = turn.translation { Text(verbatim: translation).font(TrilogyFont.translation) }
+                else { Text("history.translationUnavailable").font(TrilogyFont.text(.caption)) }
+                Divider()
+                Text(verbatim: turn.original).font(TrilogyFont.original).textSelection(.enabled)
+              }.fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(turn.speaker == "A" ? DesignToken.tintA : DesignToken.tintB)
+                .clipShape(RoundedRectangle(cornerRadius: Layout.message))
+              }.id(turn.id)
           }
-        }.padding(8)
+        }.padding(.horizontal, 16).padding(.vertical, 8)
       }
     }
   }
@@ -115,7 +125,7 @@ struct HistoryStorageNotice: View {
   var body: some View {
     if history.storageFailed {
       VStack {
-        Text("history.storageError").font(.footnote)
+        Text("history.storageError").font(TrilogyFont.text(.footnote))
         Button("history.retry", action: history.retryStorage)
       }.padding().background(DesignToken.surface).foregroundStyle(DesignToken.error)
     }

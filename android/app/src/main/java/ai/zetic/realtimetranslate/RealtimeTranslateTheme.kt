@@ -1,14 +1,53 @@
 package ai.zetic.realtimetranslate
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Typography
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** Relais uses Bouygues Telecom Trilogy colors with native typography. */
+/** Trilogy typefaces, shared with the iOS app. Read Medium supplies emphasized body text. */
+val BouyguesRead = FontFamily(
+    Font(R.font.bouygues_read_regular, FontWeight.Normal),
+    Font(R.font.bouygues_read_medium, FontWeight.Medium),
+)
+val BouyguesSpeak = FontFamily(Font(R.font.bouygues_speak, FontWeight.Bold))
+private val NativeType = Typography()
+private val TrilogyType = Typography(
+    displayLarge = NativeType.displayLarge.copy(fontFamily = BouyguesSpeak),
+    displayMedium = NativeType.displayMedium.copy(fontFamily = BouyguesSpeak),
+    displaySmall = NativeType.displaySmall.copy(fontFamily = BouyguesSpeak),
+    headlineLarge = NativeType.headlineLarge.copy(fontFamily = BouyguesSpeak),
+    headlineMedium = NativeType.headlineMedium.copy(fontFamily = BouyguesSpeak),
+    headlineSmall = NativeType.headlineSmall.copy(fontFamily = BouyguesSpeak),
+    titleLarge = NativeType.titleLarge.copy(fontFamily = BouyguesSpeak),
+    titleMedium = NativeType.titleMedium.copy(fontFamily = BouyguesRead),
+    titleSmall = NativeType.titleSmall.copy(fontFamily = BouyguesRead),
+    bodyLarge = NativeType.bodyLarge.copy(fontFamily = BouyguesRead),
+    bodyMedium = NativeType.bodyMedium.copy(fontFamily = BouyguesRead),
+    bodySmall = NativeType.bodySmall.copy(fontFamily = BouyguesRead),
+    labelLarge = NativeType.labelLarge.copy(fontFamily = BouyguesRead),
+    labelMedium = NativeType.labelMedium.copy(fontFamily = BouyguesRead),
+    labelSmall = NativeType.labelSmall.copy(fontFamily = BouyguesRead),
+)
+
+/** Native adaptation: 8-point controls, 16-point bubbles, 48-point functional actions. */
+val ActionHeight = 48.dp
+
 val Accent = Color(0xFF25465F)
 val Surface = Color.White
 val SurfaceSubtle = Color(0xFFEFF2F8)
@@ -18,8 +57,18 @@ val TextSecondary = Color(0xCC25465F)
 val Error = Color(0xFFD42D02)
 
 /** `radius.message` and `radius.control`, shared by the main screen, the drawer, and the toast. */
-val MessageShape: Shape = RoundedCornerShape(12.dp)
-val ControlShape: Shape = RoundedCornerShape(12.dp)
+val MessageShape: Shape = RoundedCornerShape(16.dp)
+val ControlShape: Shape = RoundedCornerShape(8.dp)
+
+/** Both transcript lists use 16dp outer insets. Short replies keep their natural width. */
+@Composable
+fun ChatBubbleRow(isA: Boolean, content: @Composable (Modifier) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val limit = minOf(maxWidth, (maxWidth + 32.dp) * 0.84f)
+        content(Modifier.align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
+            .widthIn(max = limit).width(IntrinsicSize.Max))
+    }
+}
 
 /** `color.scrim`: the dim behind the settings drawer and the first-run consent card. */
 val Scrim = Color.Black.copy(alpha = 0.16f)
@@ -83,6 +132,7 @@ fun RealtimeTranslateTheme(content: @Composable () -> Unit) {
             surfaceContainerHigh = TintB,
             surfaceContainerHighest = TintB,
         ),
-        content = content,
+        typography = TrilogyType,
+        content = { ProvideTextStyle(MaterialTheme.typography.bodyLarge, content = content) },
     )
 }

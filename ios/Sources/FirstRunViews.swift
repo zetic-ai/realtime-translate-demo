@@ -17,19 +17,19 @@ struct WelcomeView: View {
   var body: some View {
     FirstRunSurface {
       VStack(alignment: .leading, spacing: 16) {
-        Text(verbatim: "Relais").font(.headline).foregroundStyle(DesignToken.accent)
+        Text(verbatim: "Relais").font(TrilogyFont.text(.headline)).foregroundStyle(DesignToken.accent)
         Text(FirstRunCopy.welcomeTitle)
-          .font(.largeTitle)
+          .font(TrilogyFont.text(.largeTitle))
           .fontWeight(.semibold)
           .foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
         Text(FirstRunCopy.welcomeTagline)
-          .font(.title3)
+          .font(TrilogyFont.text(.title3))
           .foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
         ThinDivider()
         Text(FirstRunCopy.welcomePrivacy)
-          .font(.subheadline)
+          .font(TrilogyFont.text(.subheadline))
           .foregroundStyle(DesignToken.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -55,7 +55,7 @@ struct PermissionPrimingView: View {
     FirstRunSurface {
       VStack(alignment: .leading, spacing: 16) {
         Text(FirstRunCopy.primingTitle)
-          .font(.title2)
+          .font(TrilogyFont.text(.title2))
           .fontWeight(.semibold)
           .foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
@@ -64,16 +64,16 @@ struct PermissionPrimingView: View {
           ThinDivider()
           Text(FirstRunCopy.primingSpeech)
         }
-        .font(.subheadline)
+        .font(TrilogyFont.text(.subheadline))
         .foregroundStyle(DesignToken.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
         ThinDivider()
         Text(FirstRunCopy.primingPrivacy)
-          .font(.subheadline)
+          .font(TrilogyFont.text(.subheadline))
           .foregroundStyle(DesignToken.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
         Text(FirstRunCopy.primingNext)
-          .font(.caption)
+          .font(TrilogyFont.text(.caption))
           .foregroundStyle(DesignToken.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -150,34 +150,34 @@ struct ModelConsentOverlay: View {
       .padding(.top, 4)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(20)
+    .padding(24)
     .background(DesignToken.surface)
     .clipShape(RoundedRectangle(cornerRadius: Layout.message))
     .overlay(
       RoundedRectangle(cornerRadius: Layout.message).stroke(DesignToken.divider, lineWidth: 1)
     )
-    .padding(20)
+    .padding(24)
     .accessibilityAddTraits(.isModal)
   }
 
   private func copy(cellularWarning: Bool) -> some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(FirstRunCopy.consentTitle)
-        .font(.headline)
+        .font(TrilogyFont.text(.headline))
         .foregroundStyle(DesignToken.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
       Text(FirstRunCopy.consentSize)
-        .font(.subheadline)
+        .font(TrilogyFont.text(.subheadline))
         .foregroundStyle(DesignToken.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
       Text(FirstRunCopy.consentOnce)
-        .font(.subheadline)
+        .font(TrilogyFont.text(.subheadline))
         .foregroundStyle(DesignToken.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
       if cellularWarning {
         ThinDivider()
         Text(FirstRunCopy.consentCellular)
-          .font(.subheadline)
+          .font(TrilogyFont.text(.subheadline))
           .foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityIdentifier("consent-cellular-warning")
@@ -234,19 +234,10 @@ private struct FirstRunPrimaryButton: View {
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
-      // `FirstRunCopy` already localized it, so this is a `String` rendered as it stands.
-      Text(verbatim: title)
-        .font(.subheadline).fontWeight(.semibold)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(DesignToken.surface)
-    .background(DesignToken.accent)
-    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-    .accessibilityIdentifier(identifier)
-    .accessibilityLabel(title)
+    Button(action: action) { Text(verbatim: title) }
+      .buttonStyle(TrilogyActionStyle(primary: true))
+      .accessibilityIdentifier(identifier)
+      .accessibilityLabel(title)
   }
 }
 
@@ -257,21 +248,9 @@ private struct FirstRunSecondaryButton: View {
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
-      // `FirstRunCopy` already localized it, so this is a `String` rendered as it stands.
-      Text(verbatim: title)
-        .font(.subheadline).fontWeight(.semibold)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(DesignToken.textPrimary)
-    .background(DesignToken.surface)
-    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-    .overlay(
-      RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1)
-    )
-    .accessibilityIdentifier(identifier)
-    .accessibilityLabel(title)
+    Button(action: action) { Text(verbatim: title) }
+      .buttonStyle(TrilogyActionStyle(primary: false))
+      .accessibilityIdentifier(identifier)
+      .accessibilityLabel(title)
   }
 }

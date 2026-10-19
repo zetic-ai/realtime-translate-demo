@@ -12,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,8 +25,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -46,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +83,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -198,7 +200,7 @@ fun RealtimeTranslateApp(
         IconButton(onClick = onOpenSettingsDrawer, modifier = Modifier.align(Alignment.CenterStart)) {
             Icon(painterResource(R.drawable.ic_menu), stringResource(R.string.history_menu), tint = TextPrimary)
         }
-        Text(FirstRunCopy.PRODUCT_NAME, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+        Text(FirstRunCopy.PRODUCT_NAME, fontFamily = BouyguesSpeak, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
             modifier = Modifier.align(Alignment.Center))
         if (state.conversationStarted) TextButton(onClick = { onAction(UiAction.EndSession) },
             enabled = state.activeSpeaker() == null, modifier = Modifier.align(Alignment.CenterEnd)) {
@@ -206,7 +208,7 @@ fun RealtimeTranslateApp(
         }
     }
     if (state.activeSpeaker() != null) Text(statusLabel(state).text(), fontSize = 11.sp, color = TextSecondary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     HorizontalDivider(color = DividerLine)
 }
 
@@ -230,7 +232,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
     onOpenVoiceInputSettings: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -269,7 +271,7 @@ private fun canEditLanguages(state: SessionUiState): Boolean =
             shape = ControlShape,
             border = BorderStroke(1.dp, if (enabled) speakerBorder(speaker) else DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             modifier = Modifier.semantics { contentDescription = chipAccessibility },
         ) {
             Text(
@@ -517,8 +519,8 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
         shape = ControlShape,
         border = BorderStroke(1.dp, DividerLine),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = description },
-    ) { Text(label, fontSize = 14.sp) }
+        modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = description },
+    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
 }
 
 @Composable private fun ConversationList(
@@ -581,7 +583,7 @@ private fun speechLanguageStatusLabel(status: SpeechLanguage.OnDeviceStatus?): S
             Modifier.fillMaxSize(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         ) {
             if (state.conversations.isEmpty() && state.phase !in setOf(
                     SessionPhase.PermissionRequired,
@@ -673,12 +675,9 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
     val copyable = item.copyableText != null
     val copyAction = stringResource(R.string.bubble_copy_action)
     val bubbleAccessibility = stringResource(R.string.bubble_accessibility, item.speaker.label)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val bubbleMaxWidth = (maxWidth - 16.dp).coerceAtLeast(1.dp)
+    ChatBubbleRow(isA) { bubbleModifier ->
         Column(
-            Modifier
-                .align(if (isA) Alignment.CenterStart else Alignment.CenterEnd)
-                .widthIn(max = bubbleMaxWidth).fillMaxWidth()
+            bubbleModifier
                 .clip(MessageShape)
                 .background(speakerTint(item.speaker))
                 .combinedClickable(
@@ -687,9 +686,9 @@ internal const val CONVERSATION_BOTTOM_TAG = "conversation-bottom"
                     onLongClick = { menuExpanded = true },
                     onLongClickLabel = copyAction,
                 )
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .semantics { contentDescription = bubbleAccessibility },
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
@@ -888,16 +887,16 @@ private fun bottomHint(state: SessionUiState): UiText {
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = cancelLabel },
-        ) { Text(cancelLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = cancelLabel },
+        ) { Text(cancelLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     } else if (state.conversationStarted) {
         OutlinedButton(
             onClick = { onAction(UiAction.EndSession) },
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = endLabel },
-        ) { Text(endLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = endLabel },
+        ) { Text(endLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     } else {
         Button(
             onClick = { onAction(UiAction.StartConversation) },
@@ -909,8 +908,8 @@ private fun bottomHint(state: SessionUiState): UiText {
                 disabledContainerColor = SurfaceSubtle,
                 disabledContentColor = TextSecondary,
             ),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = startLabel },
-        ) { Text(startLabel, fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = ActionHeight).semantics { contentDescription = startLabel },
+        ) { Text(startLabel, fontSize = 16.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
@@ -933,13 +932,21 @@ private data class TypedInputDraft(
     val counterpart = state.settingsFor(draft.speaker.other())
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Surface,
+    ) {
+        LaunchedEffect(sheetState) {
+            snapshotFlow { sheetState.isVisible }.first { it }
+            focusRequester.requestFocus()
+        }
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.typed_input_title), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.typed_input_title), fontFamily = BouyguesSpeak, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(stringResource(R.string.typed_input_speaker), color = TextSecondary, fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Speaker.entries.forEach { speaker ->
