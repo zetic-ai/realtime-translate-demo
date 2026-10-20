@@ -97,6 +97,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     app.buttons["end-session"].tap()
     app.buttons["End and save"].tap()
     XCTAssertTrue(app.buttons["Transcript"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Session #1"].exists)
     XCTAssertTrue(app.buttons["Prepare summary"].exists)
     app.buttons["Transcript"].tap()
     XCTAssertTrue(app.staticTexts["Hello."].firstMatch.waitForExistence(timeout: 5))

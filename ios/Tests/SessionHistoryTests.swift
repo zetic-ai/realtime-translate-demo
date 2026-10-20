@@ -5,6 +5,90 @@ import XCTest
   private func turn(_ text: String = "We agreed to meet Friday.") -> SavedTurn {
     SavedTurn(id: "turn-1", speaker: "A", original: text, translation: "Vendredi.", sourceLanguage: "en", targetLanguage: "fr")
   }
+  func testNumberedTitlesAdvanceOncePerNonemptySession() throws {
+    let history = SessionHistory()
+    XCTAssertNil(history.checkpoint([], ending: true))
+    let firstID = try XCTUnwrap(history.checkpoint([turn()]))
+    XCTAssertEqual(history.sessions.first?.title, "Session #1")
+    XCTAssertEqual(history.checkpoint([turn("Updated original")]), firstID)
+    XCTAssertEqual(history.checkpoint([turn("Updated original")], ending: true), firstID)
+    XCTAssertEqual(history.sessions.first?.title, "Session #1")
+    let secondID = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+    XCTAssertNotEqual(firstID, secondID)
+    XCTAssertEqual(history.sessions.first { $0.id == secondID }?.title, "Session #2")
+  }
+
+  func testSequenceSurvivesRenameDeletingAllHistoryAndRestart() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = SessionFileStore(directory: dir)
+    let history = SessionHistory(store: store)
+    let first = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+    history.rename(first, title: "Site meeting")
+    XCTAssertEqual(try store.load().first?.title, "Site meeting")
+    let restarted = SessionHistory(store: store)
+    let second = try XCTUnwrap(restarted.checkpoint([turn()], ending: true))
+    XCTAssertEqual(restarted.sessions.first { $0.id == second }?.title, "Session #2")
+    restarted.delete(first); restarted.delete(second)
+    XCTAssertTrue(try store.load().isEmpty)
+    let afterDeletion = SessionHistory(store: store)
+    afterDeletion.checkpoint([turn()], ending: true)
+    XCTAssertEqual(afterDeletion.sessions.first?.title, "Session #3")
+  }
+
+  func testUpgradePreservesTitlesAndReservesHighestNumberBeforeDeletion() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = SessionFileStore(directory: dir)
+    let history = SessionHistory()
+    let first = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+    let second = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+    history.rename(first, title: "Legacy transcript title")
+    history.rename(second, title: "Session #12")
+    for session in history.sessions { try store.save(session) }
+    let upgraded = SessionHistory(store: store)
+    XCTAssertEqual(Set(upgraded.sessions.map(\.title)), ["Legacy transcript title", "Session #12"])
+    upgraded.delete(first); upgraded.delete(second)
+    let restarted = SessionHistory(store: store)
+    restarted.checkpoint([turn()], ending: true)
+    XCTAssertEqual(restarted.sessions.first?.title, "Session #13")
+  }
+
+  func testLegacyUnnumberedHistorySeedsSequenceFromSavedCount() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = SessionFileStore(directory: dir)
+    let history = SessionHistory()
+    for title in ["First meeting", "Second meeting"] {
+      let id = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+      history.rename(id, title: title)
+    }
+    for session in history.sessions { try store.save(session) }
+    let upgraded = SessionHistory(store: store)
+    let id = try XCTUnwrap(upgraded.checkpoint([turn()], ending: true))
+    XCTAssertEqual(upgraded.sessions.first { $0.id == id }?.title, "Session #3")
+  }
+
+  func testDamagedCounterBlocksWritesAndCanBeRetriedWithoutOverwritingHistory() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = SessionFileStore(directory: dir)
+    let history = SessionHistory(store: store)
+    let id = try XCTUnwrap(history.checkpoint([turn()], ending: true))
+    let counter = dir.appendingPathComponent("session-number.sequence")
+    try Data("damaged".utf8).write(to: counter)
+    let recovered = SessionHistory(store: store)
+    XCTAssertTrue(recovered.storageFailed)
+    XCTAssertNil(recovered.checkpoint([turn()], ending: true))
+    XCTAssertEqual(try store.load().first?.id, id)
+    XCTAssertEqual(try String(contentsOf: counter, encoding: .utf8), "damaged")
+    try store.saveLastSessionNumber(1)
+    recovered.retryStorage()
+    XCTAssertFalse(recovered.storageFailed)
+    let next = try XCTUnwrap(recovered.checkpoint([turn()], ending: true))
+    XCTAssertEqual(recovered.sessions.first { $0.id == next }?.title, "Session #2")
+  }
+
   func testHistoryRoundTripRenameAndDelete() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }

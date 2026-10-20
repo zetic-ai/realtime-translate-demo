@@ -12,6 +12,8 @@ End is disabled during a live turn so finalization is not discarded by a UI tap.
 
 Data schema version 1 stores a stable session ID, title, start/end time, app language for summary generation, ordered turns, summary status and optional structured summary. Each turn retains its stable ID, speaker, original text, translation if available, and source/target language codes. JSON writes replace a single session atomically. Files are private to the app and excluded from cloud backup. Damaged history is retained and reported; the app does not overwrite it with an empty list.
 
+New sessions are titled **Session #1**, **Session #2**, and so on, assigned at the first nonempty checkpoint. Later checkpoints retain the title, and users can still rename it. A separate private, atomically written counter survives deletion, renaming and app restarts. Existing titles remain unchanged; upgrading seeds the counter from the saved-session count or the highest numbered title, whichever is greater. Empty sessions consume no number. A failed write or process death after reserving a number can leave a gap; numbers are never recycled.
+
 At process restart, unfinished sessions remain readable in History. Interrupted generation becomes Failed with retry. A summary failure never deletes the underlying session. Rename while generating is preserved; deletion/cancellation invalidates the worker before it can publish a late result.
 
 ## Summary runtime

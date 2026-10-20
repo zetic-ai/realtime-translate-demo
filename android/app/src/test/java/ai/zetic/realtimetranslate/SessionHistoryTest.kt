@@ -21,6 +21,83 @@ import org.junit.Test
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SessionHistoryTest {
     private fun turn(text: String = "We agreed to meet on Friday.") = SavedTurn("turn-1", "A", text, "Vendredi.", "en", "fr")
+    @Test fun `numbered titles advance once per nonempty session`() = runTest {
+        val history = SessionHistory(scope = this)
+        assertNull(history.checkpoint(emptyList(), ending = true))
+        val first = requireNotNull(history.checkpoint(listOf(turn())))
+        assertEquals("Session #1", history.state.value.sessions.single().title)
+        assertEquals(first, history.checkpoint(listOf(turn("Updated original"))))
+        assertEquals(first, history.checkpoint(listOf(turn("Updated original")), ending = true))
+        assertEquals("Session #1", history.state.value.sessions.single().title)
+        val second = requireNotNull(history.checkpoint(listOf(turn()), ending = true))
+        assertNotEquals(first, second)
+        assertEquals("Session #2", history.state.value.sessions.single { it.id == second }.title)
+    }
+    @Test fun `sequence survives rename deleting all history and restart`() = runTest {
+        val dir = Files.createTempDirectory("relais-sequence").toFile()
+        try {
+            val store = SessionFileStore(dir)
+            val history = SessionHistory(store, this)
+            val first = requireNotNull(history.checkpoint(listOf(turn()), ending = true))
+            history.rename(first, "Site meeting")
+            assertEquals("Site meeting", store.load().single().title)
+            val restarted = SessionHistory(store, this)
+            val second = requireNotNull(restarted.checkpoint(listOf(turn()), ending = true))
+            assertEquals("Session #2", restarted.state.value.sessions.single { it.id == second }.title)
+            restarted.delete(first); restarted.delete(second)
+            assertTrue(store.load().isEmpty())
+            val afterDeletion = SessionHistory(store, this)
+            afterDeletion.checkpoint(listOf(turn()), ending = true)
+            assertEquals("Session #3", afterDeletion.state.value.sessions.single().title)
+        } finally { dir.deleteRecursively() }
+    }
+    @Test fun `upgrade preserves titles and reserves highest number before deletion`() = runTest {
+        val dir = Files.createTempDirectory("relais-sequence-upgrade").toFile()
+        try {
+            val store = SessionFileStore(dir)
+            val first = SavedSession(title = "Legacy transcript title", turns = listOf(turn()), endedAt = 1)
+            val second = SavedSession(title = "Session #12", turns = listOf(turn()), endedAt = 1)
+            store.save(first); store.save(second)
+            val upgraded = SessionHistory(store, this)
+            assertEquals(setOf(first.title, second.title), upgraded.state.value.sessions.map { it.title }.toSet())
+            upgraded.delete(first.id); upgraded.delete(second.id)
+            val restarted = SessionHistory(store, this)
+            restarted.checkpoint(listOf(turn()), ending = true)
+            assertEquals("Session #13", restarted.state.value.sessions.single().title)
+        } finally { dir.deleteRecursively() }
+    }
+    @Test fun `legacy unnumbered history seeds sequence from saved count`() = runTest {
+        val dir = Files.createTempDirectory("relais-legacy-sequence").toFile()
+        try {
+            val store = SessionFileStore(dir)
+            listOf("First meeting", "Second meeting").forEach {
+                store.save(SavedSession(title = it, turns = listOf(turn()), endedAt = 1))
+            }
+            val upgraded = SessionHistory(store, this)
+            val id = requireNotNull(upgraded.checkpoint(listOf(turn()), ending = true))
+            assertEquals("Session #3", upgraded.state.value.sessions.single { it.id == id }.title)
+        } finally { dir.deleteRecursively() }
+    }
+    @Test fun `damaged counter blocks writes and can be retried without overwriting history`() = runTest {
+        val dir = Files.createTempDirectory("relais-counter-retry").toFile()
+        try {
+            val store = SessionFileStore(dir)
+            val history = SessionHistory(store, this)
+            val id = requireNotNull(history.checkpoint(listOf(turn()), ending = true))
+            val counter = File(dir, "session-number.sequence")
+            counter.writeText("damaged")
+            val recovered = SessionHistory(store, this)
+            assertTrue(recovered.state.value.storageFailed)
+            assertNull(recovered.checkpoint(listOf(turn()), ending = true))
+            assertEquals(id, store.load().single().id)
+            assertEquals("damaged", counter.readText())
+            store.saveLastSessionNumber(1)
+            recovered.retryStorage()
+            assertFalse(recovered.state.value.storageFailed)
+            val next = requireNotNull(recovered.checkpoint(listOf(turn()), ending = true))
+            assertEquals("Session #2", recovered.state.value.sessions.single { it.id == next }.title)
+        } finally { dir.deleteRecursively() }
+    }
     @Test fun `history round trips original and translation and supports rename and deletion`() = runTest {
         val dir = Files.createTempDirectory("relais-history").toFile()
         try {

@@ -87,11 +87,29 @@ final class SessionFileStore {
 
   func save(_ session: SavedSession) throws {
     guard UUID(uuidString: session.id) != nil else { throw CocoaError(.fileWriteInvalidFileName) }
+    try prepareDirectory()
+    try JSONEncoder().encode(session).write(to: url(session.id), options: [.atomic, .completeFileProtection])
+  }
+
+  func loadLastSessionNumber() throws -> Int {
+    guard FileManager.default.fileExists(atPath: sequenceURL.path) else { return 0 }
+    guard let number = Int(try String(contentsOf: sequenceURL, encoding: .utf8)), number >= 0 else {
+      throw CocoaError(.fileReadCorruptFile)
+    }
+    return number
+  }
+
+  func saveLastSessionNumber(_ number: Int) throws {
+    try prepareDirectory()
+    try Data(String(number).utf8).write(to: sequenceURL, options: [.atomic, .completeFileProtection])
+  }
+
+  private var sequenceURL: URL { directory.appendingPathComponent("session-number.sequence") }
+  private func prepareDirectory() throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     var excluded = directory
     var values = URLResourceValues(); values.isExcludedFromBackup = true
     try excluded.setResourceValues(values)
-    try JSONEncoder().encode(session).write(to: url(session.id), options: [.atomic, .completeFileProtection])
   }
 
   func delete(_ id: String) throws { try FileManager.default.removeItem(at: url(id)) }
@@ -111,6 +129,7 @@ final class SessionFileStore {
   var savedSessions: [SavedSession] { sessions.filter { $0.id != activeID } }
   private var activeID: String?
   private var captureStartedAt: Date?
+  private var lastSessionNumber = 0
   func beginCapture() { if activeID == nil { captureStartedAt = Date() } }
   private var job: Task<Void, Never>?
   private var working = false
@@ -123,6 +142,7 @@ final class SessionFileStore {
                                                        maxOutputTokens: 2048, contextSize: 4096)
     do {
       sessions = try store?.load() ?? []
+      try restoreSessionNumber()
       // A process death leaves a readable session and an explicit retry, never a permanent spinner.
       for index in sessions.indices {
         if sessions[index].endedAt == nil || sessions[index].summaryStatus == .generating {
@@ -138,9 +158,12 @@ final class SessionFileStore {
     // Refuse writes after an unreadable history: retain the current transcript for retry.
     guard !storageFailed else { return nil }
     let existing = sessions.first { $0.id == activeID }
+    let title: String
+    do { title = try existing?.title ?? nextSessionTitle() }
+    catch { storageFailed = true; return nil }
     var session = existing ?? SavedSession(
       schemaVersion: 1, id: UUID().uuidString,
-      title: String(turns[0].original.prefix(60)), startedAt: captureStartedAt ?? Date(), endedAt: nil,
+      title: title, startedAt: captureStartedAt ?? Date(), endedAt: nil,
       turns: [], summaryStatus: .pending, summary: nil,
       summaryLanguage: Locale.current.language.languageCode?.identifier ?? "en")
     session.turns = turns.map { turn in
@@ -174,8 +197,30 @@ final class SessionFileStore {
       let loaded = try store?.load() ?? []
       // Preserve this process's active snapshot; its next checkpoint retries the atomic write.
       for session in loaded where !sessions.contains(where: { $0.id == session.id }) { sessions.append(session) }
+      try restoreSessionNumber()
       storageFailed = false
     } catch { storageFailed = true }
+  }
+
+  private func restoreSessionNumber() throws {
+    let stored = try store?.loadLastSessionNumber() ?? 0
+    // Preserve legacy/custom titles; seed the sequence from existing history on upgrade.
+    let highestTitleNumber = sessions.compactMap { session -> Int? in
+      guard session.title.hasPrefix("Session #") else { return nil }
+      return Int(session.title.dropFirst("Session #".count))
+    }.max() ?? 0
+    lastSessionNumber = max(lastSessionNumber, stored, sessions.count, highestTitleNumber)
+    if lastSessionNumber > stored { try store?.saveLastSessionNumber(lastSessionNumber) }
+  }
+
+  private func nextSessionTitle() throws -> String {
+    try restoreSessionNumber()
+    guard lastSessionNumber < Int.max else { throw CocoaError(.fileWriteUnknown) }
+    let next = lastSessionNumber + 1
+    // Reserve before saving the transcript so deletion or a crash cannot reuse a number.
+    try store?.saveLastSessionNumber(next)
+    lastSessionNumber = next
+    return "Session #\(next)"
   }
 
   @discardableResult private func persist(_ session: SavedSession) -> Bool {

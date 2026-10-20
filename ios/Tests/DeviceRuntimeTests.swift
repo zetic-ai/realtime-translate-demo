@@ -26,7 +26,6 @@ final class DeviceRuntimeTests: XCTestCase {
         state: \(status.state.rawValue)
         bytesDownloaded: \(status.bytesDownloaded)
         totalBytes: \(status.totalBytes.map { String($0) } ?? "unknown")
-        progress: \(status.progress.map { String($0) } ?? "unknown")
         errorMessagePresent: \(status.errorMessage != nil)
         """
       let attachment = XCTAttachment(string: text)
