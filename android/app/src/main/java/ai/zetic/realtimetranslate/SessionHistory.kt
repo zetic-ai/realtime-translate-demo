@@ -64,11 +64,23 @@ class SessionFileStore(private val directory: File) {
         }
     }.sortedByDescending { it.startedAt }
     fun save(session: SavedSession) {
-        val destination = file(session.id)
+        writeAtomically(file(session.id), gson.toJson(session))
+    }
+    fun loadLastSessionNumber(): Long {
+        val file = File(directory, "session-number.sequence")
+        if (!file.exists()) return 0
+        val number = requireNotNull(file.readText().toLongOrNull())
+        require(number >= 0)
+        return number
+    }
+    fun saveLastSessionNumber(number: Long) {
+        writeAtomically(File(directory, "session-number.sequence"), number.toString())
+    }
+    private fun writeAtomically(destination: File, content: String) {
         check(directory.isDirectory || directory.mkdirs())
-        val temp = File(directory, "${session.id}.tmp")
+        val temp = File(directory, "${destination.name}.tmp")
         try {
-            FileOutputStream(temp).use { out -> out.write(gson.toJson(session).toByteArray(Charsets.UTF_8)); out.fd.sync() }
+            FileOutputStream(temp).use { out -> out.write(content.toByteArray(Charsets.UTF_8)); out.fd.sync() }
             Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } finally { temp.delete() }
     }
@@ -86,6 +98,7 @@ class SessionHistory(private val store: SessionFileStore? = null, private val sc
     val savedSessions get() = mutable.value.sessions.filterNot { it.id == activeId }
     private var activeId: String? = null
     private var captureStartedAt: Long? = null
+    private var lastSessionNumber = 0L
     fun beginCapture() { if (activeId == null) captureStartedAt = System.currentTimeMillis() }
     private var job: Job? = null
     private var ticket: String? = null
@@ -96,13 +109,16 @@ class SessionHistory(private val store: SessionFileStore? = null, private val sc
                     session.copy(summaryStatus = SummaryStatus.failed).also { store?.save(it) }
                 } else session
             }
+            restoreSessionNumber(loaded)
             mutable.value = HistoryState(sessions = loaded)
         } catch (_: Exception) { mutable.value = HistoryState(storageFailed = true) }
     }
     fun checkpoint(turns: List<SavedTurn>, ending: Boolean = false): String? {
         if (turns.isEmpty() || mutable.value.storageFailed) return null
         val old = mutable.value.sessions.firstOrNull { it.id == activeId }
-        val session = (old ?: SavedSession(title = turns.first().original.prefixCodePoints(60), turns = emptyList(), startedAt = captureStartedAt ?: System.currentTimeMillis())).copy(
+        val title = try { old?.title ?: nextSessionTitle() }
+        catch (_: Exception) { mutable.value = mutable.value.copy(storageFailed = true); return null }
+        val session = (old ?: SavedSession(title = title, turns = emptyList(), startedAt = captureStartedAt ?: System.currentTimeMillis())).copy(
             turns = turns, endedAt = if (ending) System.currentTimeMillis() else null)
         if (!ending && old?.turns == turns) return old.id
         if (!persist(session)) return null
@@ -130,9 +146,28 @@ class SessionHistory(private val store: SessionFileStore? = null, private val sc
     fun retryStorage() {
         try {
             val loaded = store?.load().orEmpty()
+            restoreSessionNumber(mutable.value.sessions + loaded.filter { disk -> mutable.value.sessions.none { it.id == disk.id } })
             mutable.value = mutable.value.copy(storageFailed = false,
                 sessions = (mutable.value.sessions + loaded.filter { disk -> mutable.value.sessions.none { it.id == disk.id } }))
         } catch (_: Exception) { mutable.value = mutable.value.copy(storageFailed = true) }
+    }
+    private fun restoreSessionNumber(sessions: List<SavedSession>) {
+        val stored = store?.loadLastSessionNumber() ?: 0L
+        // Preserve legacy/custom titles; seed the sequence from existing history on upgrade.
+        val highestTitleNumber = sessions.mapNotNull {
+            if (it.title.startsWith("Session #")) it.title.removePrefix("Session #").toLongOrNull() else null
+        }.maxOrNull() ?: 0L
+        lastSessionNumber = maxOf(lastSessionNumber, stored, sessions.size.toLong(), highestTitleNumber)
+        if (lastSessionNumber > stored) store?.saveLastSessionNumber(lastSessionNumber)
+    }
+    private fun nextSessionTitle(): String {
+        restoreSessionNumber(mutable.value.sessions)
+        check(lastSessionNumber < Long.MAX_VALUE)
+        val next = lastSessionNumber + 1
+        // Reserve before saving the transcript so deletion or a crash cannot reuse a number.
+        store?.saveLastSessionNumber(next)
+        lastSessionNumber = next
+        return "Session #$next"
     }
     fun interrupt() {
         ticket = null; job?.cancel()
